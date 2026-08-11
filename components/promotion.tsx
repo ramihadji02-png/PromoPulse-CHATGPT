@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { getChannel, getLine } from '@/data/mock';
 import { euro, shortDate } from '@/lib/utils';
@@ -52,24 +55,24 @@ export function AiRecommendation({ promo }: { promo: Promotion }) {
 }
 
 export function PromotionTable({ items }: { items: Promotion[] }) {
+  const router = useRouter();
+
   return (
     <div className="overflow-x-auto rounded-2xl border border-navy-100 bg-white">
-      <table className="w-full min-w-[900px] text-left text-sm">
+      <table className="w-full min-w-[860px] table-fixed text-left text-sm">
+        <colgroup><col className="w-[14%]" /><col className="w-[25%]" /><col className="w-[18%]" /><col className="w-[19%]" /><col className="w-[12%]" /><col className="w-[12%]" /></colgroup>
         <thead className="bg-navy-50 text-navy-500">
-          <tr>{['Promotion', 'Produits', 'Canal', 'Période', 'Mécanique', 'Marge', 'ROI', 'Contrôle', 'Statut'].map((heading) => <th className="p-3" key={heading}>{heading}</th>)}</tr>
+          <tr>{['Enseigne', 'Promotion', 'Produits', 'Période', 'Contrôle', 'Statut'].map((heading) => <th className="whitespace-nowrap p-4" key={heading}>{heading}</th>)}</tr>
         </thead>
         <tbody>
           {items.map((promotion) => (
-            <tr className="border-t border-navy-100" key={promotion.id}>
-              <td className="p-3 font-semibold"><Link href={`/promotions/${promotion.id}`}>{promotion.name}</Link></td>
-              <td className="p-3">{getLine(promotion.productLineId).name}</td>
-              <td className="p-3">{getChannel(promotion.channelIds[0]).name}</td>
-              <td className="p-3">{shortDate(promotion.startDate)} → {shortDate(promotion.endDate)}</td>
-              <td className="p-3">{promotion.mechanic}</td>
-              <td className="p-3">{promotion.marginRate}%</td>
-              <td className="p-3">{promotion.roi}x</td>
-              <td className="p-3"><StatusBadge status={promotion.controlStatus} /></td>
-              <td className="p-3"><StatusBadge status={promotion.operationalStatus} /></td>
+            <tr className="group cursor-pointer border-t border-navy-100 transition hover:bg-navy-50/70 focus-within:bg-navy-50/70" key={promotion.id} onClick={() => router.push(`/promotions/${promotion.id}`)}>
+              <td className="w-[14%] truncate p-4 font-semibold" title={getChannel(promotion.channelIds[0]).name}><Link className="block" href={`/promotions/${promotion.id}`}>{getChannel(promotion.channelIds[0]).name}</Link></td>
+              <td className="w-[25%] truncate p-4 font-semibold text-navy-900" title={promotion.name.replace(`${getChannel(promotion.channelIds[0]).name} — `, '')}><Link className="block" href={`/promotions/${promotion.id}`}>{promotion.name.replace(`${getChannel(promotion.channelIds[0]).name} — `, '')}</Link></td>
+              <td className="w-[18%] truncate p-4" title={getLine(promotion.productLineId).name}>{getLine(promotion.productLineId).name}</td>
+              <td className="w-[19%] whitespace-nowrap p-4">{shortDate(promotion.startDate)} → {shortDate(promotion.endDate)}</td>
+              <td className="w-[12%] whitespace-nowrap p-4"><StatusBadge status={promotion.controlStatus} /></td>
+              <td className="w-[12%] whitespace-nowrap p-4"><StatusBadge status={promotion.operationalStatus} /></td>
             </tr>
           ))}
         </tbody>

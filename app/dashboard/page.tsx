@@ -20,7 +20,7 @@ function compactRange(promotion: Promotion) {
   return new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short' }).formatRange(new Date(promotion.startDate), new Date(promotion.endDate));
 }
 
-function ActionLine({ id, icon, title, action, promotions: items }: { id: string; icon: React.ReactNode; title: string; action: string; promotions: Promotion[] }) {
+function ActionLine({ id, icon, title, action, promotions: items, category }: { id: string; icon: React.ReactNode; title: string; action: string; promotions: Promotion[]; category: 'regulatory' | 'performance' | 'operational' }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -40,8 +40,10 @@ function ActionLine({ id, icon, title, action, promotions: items }: { id: string
           {items.slice(0, 3).map((promotion) => (
             <div key={promotion.id} className="flex flex-col gap-2 border-b border-white pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="font-semibold text-navy-900">{getLine(promotion.productLineId).name} — {getChannel(promotion.channelIds[0]).name}</p>
-                <p className="mt-1 text-sm text-navy-500">Marge : {promotion.marginRate}% → Objectif : 15%</p>
+                <p className="font-semibold text-navy-900">{getChannel(promotion.channelIds[0]).name} — {getLine(promotion.productLineId).name}</p>
+                {category === 'regulatory' && <p className="mt-1 text-sm text-navy-500">Problème : {promotion.checks[0]?.explanation}</p>}
+                {category === 'performance' && <p className="mt-1 text-sm text-navy-500">Marge : {promotion.marginRate}% · Objectif : 15 %</p>}
+                {category === 'operational' && <p className="mt-1 text-sm text-navy-500">{compactRange(promotion)} · {promotion.operationalStatus}</p>}
               </div>
               <Link className="text-sm font-semibold text-mint-700" href={`/promotions/${promotion.id}`}>Ouvrir</Link>
             </div>
@@ -85,9 +87,9 @@ export default function Dashboard() {
         <Card className="p-6">
           <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-navy-400">Actions importantes</h2>
           <div className="mt-4">
-            <ActionLine id="problems" icon={<AlertTriangle size={17} className="text-red-600" />} title={`${problemPromotions.length} promotions présentent un problème réglementaire`} action="Voir les promotions" promotions={problemPromotions} />
-            <ActionLine id="margins" icon={<TrendingDown size={17} className="text-orange-600" />} title={`${lowMarginPromotions.length} promotions sont sous votre objectif de marge`} action="Analyser" promotions={lowMarginPromotions} />
-            <ActionLine id="week" icon={<CalendarDays size={17} className="text-blue-600" />} title="2 promotions commencent cette semaine" action="Vérifier" promotions={upcomingPromotions.slice(0, 2)} />
+            <ActionLine id="problems" category="regulatory" icon={<AlertTriangle size={17} className="text-red-600" />} title={`${problemPromotions.length} promotions présentent un problème réglementaire`} action="Voir les promotions" promotions={problemPromotions} />
+            <ActionLine id="margins" category="performance" icon={<TrendingDown size={17} className="text-orange-600" />} title={`${lowMarginPromotions.length} promotions sont sous votre objectif de marge`} action="Analyser" promotions={lowMarginPromotions} />
+            <ActionLine id="week" category="operational" icon={<CalendarDays size={17} className="text-blue-600" />} title="2 promotions commencent prochainement" action="Vérifier" promotions={upcomingPromotions.slice(0, 2)} />
           </div>
         </Card>
 

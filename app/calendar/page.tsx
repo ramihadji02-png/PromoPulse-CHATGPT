@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { AlertCircle, ChevronLeft, ChevronRight, ExternalLink, Plus } from 'lucide-react';
+import { AlertCircle, ChevronLeft, ChevronRight, ExternalLink, Plus, X } from 'lucide-react';
 import { Button, Card, StatusBadge, Tabs } from '@/components/ui';
 import { getChannel, getLine, getProduct, promotions } from '@/data/mock';
 import { cn } from '@/lib/utils';
@@ -10,6 +10,13 @@ import type { Promotion } from '@/types/promo';
 
 const zoomLevels = ['Année', 'Semestre', 'Trimestre', 'Mois', 'Semaine'];
 const dayMs = 86400000;
+const channelColors: Record<string, { bar: string; dot: string }> = {
+  ch1: { bar: 'border-blue-200 bg-blue-100 text-blue-950 hover:bg-blue-200', dot: 'bg-blue-400' },
+  ch2: { bar: 'border-violet-200 bg-violet-100 text-violet-950 hover:bg-violet-200', dot: 'bg-violet-400' },
+  ch3: { bar: 'border-teal-200 bg-teal-100 text-teal-950 hover:bg-teal-200', dot: 'bg-teal-400' },
+  ch4: { bar: 'border-amber-200 bg-amber-100 text-amber-950 hover:bg-amber-200', dot: 'bg-amber-400' },
+  ch5: { bar: 'border-rose-200 bg-rose-100 text-rose-950 hover:bg-rose-200', dot: 'bg-rose-400' },
+};
 const commercialEvents = [
   { name: 'Soldes', start: '2026-01-08', end: '2026-02-04' }, { name: 'Saint-Valentin', start: '2026-02-14', end: '2026-02-14' },
   { name: 'Pâques', start: '2026-04-05', end: '2026-04-06' }, { name: 'Fête des Mères', start: '2026-05-31', end: '2026-05-31' },
@@ -54,17 +61,12 @@ function blockText(zoom: string, promotion: Promotion) {
   if (zoom === 'Semestre') return <><strong>{line}</strong><span>{channel}</span></>;
   if (zoom === 'Trimestre') return <><strong>{line}</strong><span>{channel} · {promotion.mechanic}</span></>;
   if (zoom === 'Mois') return <><strong>{line}</strong><span>{channel} · {promotion.mechanic}</span><span>{promotion.controlStatus}</span></>;
-  return <><strong>{promotion.name}</strong><span>{line} · {channel}</span><span>{fmt(promotion.startDate, promotion.endDate)} · {promotion.mechanic}</span><span>Marge {promotion.marginRate}% · ROI {promotion.roi}×</span></>;
-}
-function tone(promotion: Promotion) {
-  if (promotion.controlStatus === 'Problème') return 'bg-red-100 text-red-950 border-red-200 hover:bg-red-200';
-  if (promotion.controlStatus === 'Vigilance') return 'bg-orange-100 text-orange-950 border-orange-200 hover:bg-orange-200';
-  return 'bg-mint-100 text-navy-950 border-mint-200 hover:bg-mint-200';
+  return <><strong>{promotion.name}</strong><span>{line} · {channel}</span><span>{fmt(promotion.startDate, promotion.endDate)} · {promotion.mechanic}</span><span>{promotion.operationalStatus}</span></>;
 }
 
 export default function Calendar() {
   const [zoom, setZoom] = useState<keyof typeof periods>('Mois');
-  const [selected, setSelected] = useState(promotions[1]);
+  const [selected, setSelected] = useState<Promotion | null>(null);
   const period = periods[zoom];
   const start = date(period.start); const end = date(period.end);
   const visible = useMemo(() => promotions.filter((promotion) => overlaps(promotion, start, end)).sort((a, b) => +date(a.startDate) - +date(b.startDate)), [start, end]);
@@ -73,7 +75,7 @@ export default function Calendar() {
   const height = Math.max(rowHeight + 34, (Math.max(0, ...laidOut.map((item) => item.row)) + 1) * rowHeight + 36);
   const events = commercialEvents.filter((event) => overlaps(event, start, end));
   const minWidth = zoom === 'Année' ? 1.1 : zoom === 'Semaine' ? 10 : 4;
-  const firstProduct = getProduct(selected.products[0]?.productId);
+  const firstProduct = selected ? getProduct(selected.products[0]?.productId) : undefined;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -88,11 +90,15 @@ export default function Calendar() {
         </div>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <Card className="overflow-hidden p-0">
+      <Card className="overflow-hidden p-0">
           <div className="flex flex-col gap-4 border-b border-navy-100 p-5 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3"><button className="rounded-full border border-navy-100 p-2 text-navy-500" type="button"><ChevronLeft size={16} /></button><div><h2 className="text-xl font-bold">{period.label}</h2><p className="text-sm text-navy-500">{visible.length} promotions visibles · hauteur ajustée aux chevauchements</p></div><button className="rounded-full border border-navy-100 p-2 text-navy-500" type="button"><ChevronRight size={16} /></button></div>
             <Button variant="secondary"><Plus className="mr-2" size={16} />Ajouter un temps fort</Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-navy-100 px-5 py-3 text-xs text-navy-600">
+            <span className="font-bold uppercase tracking-[0.14em] text-navy-400">Enseignes</span>
+            {['ch1', 'ch2', 'ch3', 'ch4', 'ch5'].map((id) => <span className="flex items-center gap-2" key={id}><span className={cn('h-2.5 w-2.5 rounded-full', channelColors[id].dot)} />{getChannel(id).name}</span>)}
+            <span className="ml-auto flex items-center gap-2"><AlertCircle size={13} className="text-red-600" /> Contrôle à vérifier</span>
           </div>
           <div className="overflow-x-auto p-5">
             <div className="min-w-[920px]">
@@ -100,23 +106,25 @@ export default function Calendar() {
               <div className="relative mt-3 rounded-3xl bg-navy-50/70" style={{ height }}>
                 {period.ticks.slice(1).map((tick, index) => <div key={tick} className="absolute inset-y-0 w-px bg-white" style={{ left: `${((index + 1) / period.ticks.length) * 100}%` }} />)}
                 {events.map((event) => <div key={event.name} className="absolute top-2 h-5 rounded-full border border-blue-100 bg-blue-50/90 px-2 text-[11px] font-semibold text-blue-700" style={position(event.start, event.end, start, end, 2)}>{event.name}</div>)}
-                {laidOut.map(({ promotion, row }) => <button key={promotion.id} className={cn('group absolute overflow-visible rounded-xl border px-2 py-1.5 text-left text-xs shadow-sm transition hover:z-20 focus:z-20 focus:outline-none focus:ring-2 focus:ring-mint-300', zoom !== 'Année' && 'min-h-10', tone(promotion))} onClick={() => setSelected(promotion)} style={{ ...position(promotion.startDate, promotion.endDate, start, end, minWidth), top: 32 + row * rowHeight }} type="button"><span className="flex flex-col leading-snug">{blockText(zoom, promotion)}</span><span className="pointer-events-none absolute left-0 top-[calc(100%+8px)] z-30 hidden w-64 rounded-2xl border border-navy-100 bg-white p-4 text-navy-900 shadow-soft group-hover:block group-focus:block"><strong>{getLine(promotion.productLineId).name}</strong><span className="mt-1 block text-sm text-navy-600">{getChannel(promotion.channelIds[0]).name}</span><span className="mt-2 block text-sm text-navy-600">{fmt(promotion.startDate, promotion.endDate)} · {promotion.mechanic}</span><span className="mt-2 block text-sm text-navy-600">Marge {promotion.marginRate}% · ROI {promotion.roi}×</span></span></button>)}
+                {laidOut.map(({ promotion, row }) => <button key={promotion.id} className={cn('group absolute overflow-visible rounded-xl border px-2 py-1.5 text-left text-xs shadow-sm transition hover:z-20 focus:z-20 focus:outline-none focus:ring-2 focus:ring-mint-300', zoom !== 'Année' && 'min-h-10', channelColors[promotion.channelIds[0]]?.bar ?? 'border-slate-200 bg-slate-100 text-slate-950')} onClick={() => setSelected(promotion)} style={{ ...position(promotion.startDate, promotion.endDate, start, end, minWidth), top: 32 + row * rowHeight }} type="button"><span className="flex flex-col leading-snug">{blockText(zoom, promotion)}</span>{promotion.controlStatus !== 'Conforme' && <AlertCircle className={cn('absolute right-1 top-1', promotion.controlStatus === 'Problème' ? 'text-red-600' : 'text-orange-600')} size={zoom === 'Année' ? 10 : 13} />}<span className="pointer-events-none absolute left-0 top-[calc(100%+8px)] z-30 hidden w-64 rounded-2xl border border-navy-100 bg-white p-4 text-navy-900 shadow-soft group-hover:block group-focus:block"><strong>{getLine(promotion.productLineId).name}</strong><span className="mt-1 block text-sm text-navy-600">{getChannel(promotion.channelIds[0]).name}</span><span className="mt-2 block text-sm text-navy-600">{fmt(promotion.startDate, promotion.endDate)} · {promotion.mechanic}</span><span className="mt-2 block text-sm text-navy-600">{promotion.operationalStatus} · {promotion.controlStatus}</span></span></button>)}
               </div>
             </div>
           </div>
-        </Card>
+      </Card>
 
-        <aside className="space-y-4">
-          <Card>
+      {selected && <div className="fixed inset-0 z-50 flex justify-end bg-navy-950/20" onClick={() => setSelected(null)} role="presentation">
+        <aside aria-label="Détail de la promotion" className="h-full w-full max-w-md overflow-y-auto bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="flex items-start justify-between gap-4">
             <h2 className="text-xl font-bold">{selected.name}</h2>
+            <button aria-label="Fermer" className="rounded-full border border-navy-100 p-2 text-navy-500 hover:bg-navy-50" onClick={() => setSelected(null)} type="button"><X size={18} /></button>
+          </div>
             <p className="mt-2 text-sm text-navy-500">{getLine(selected.productLineId).name} · {fmt(selected.startDate, selected.endDate)}</p>
             <div className="mt-4 flex flex-wrap gap-2"><StatusBadge status={selected.controlStatus} /><StatusBadge status={selected.operationalStatus} /></div>
             <dl className="mt-5 space-y-2 text-sm text-navy-600"><div><dt className="font-semibold text-navy-900">Produit</dt><dd>{firstProduct?.name} · {firstProduct?.ean.code}</dd></div><div><dt className="font-semibold text-navy-900">Canal</dt><dd>{getChannel(selected.channelIds[0]).name}</dd></div><div><dt className="font-semibold text-navy-900">Mécanique</dt><dd>{selected.mechanic}</dd></div><div><dt className="font-semibold text-navy-900">Performance</dt><dd>Marge {selected.marginRate}% · ROI {selected.roi}×</dd></div></dl>
             {selected.controlStatus !== 'Conforme' && <div className="mt-4 flex gap-3 rounded-2xl border border-orange-100 bg-orange-50 p-4 text-sm text-orange-800"><AlertCircle className="mt-0.5 shrink-0" size={17} /><p>{selected.checks[0]?.explanation}</p></div>}
             <Link href={`/promotions/${selected.id}`}><Button className="mt-6 w-full"><ExternalLink className="mr-2" size={16} />Ouvrir la promotion</Button></Link>
-          </Card>
         </aside>
-      </div>
+      </div>}
     </div>
   );
 }
