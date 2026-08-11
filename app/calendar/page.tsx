@@ -2,135 +2,105 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { AlertCircle, Archive, CalendarRange, Copy, ExternalLink, Move, RotateCcw } from 'lucide-react';
+import { AlertCircle, ChevronLeft, ChevronRight, ExternalLink, Plus } from 'lucide-react';
 import { Button, Card, StatusBadge, Tabs } from '@/components/ui';
-import { getChannel, getLine, promotions } from '@/data/mock';
+import { getChannel, getLine, getProduct, promotions } from '@/data/mock';
 import { cn } from '@/lib/utils';
 import type { Promotion } from '@/types/promo';
 
 const zoomLevels = ['Année', 'Semestre', 'Trimestre', 'Mois', 'Semaine'];
-const monthLabels = ['Juillet', 'Août', 'Septembre', 'Octobre'];
-const timelineStart = new Date('2026-07-01T00:00:00');
-const timelineEnd = new Date('2026-10-31T00:00:00');
-const day = 1000 * 60 * 60 * 24;
-const totalDays = Math.max(1, Math.round((timelineEnd.getTime() - timelineStart.getTime()) / day));
+const dayMs = 86400000;
+const commercialEvents = [
+  { name: 'Soldes', start: '2026-01-08', end: '2026-02-04' }, { name: 'Saint-Valentin', start: '2026-02-14', end: '2026-02-14' },
+  { name: 'Pâques', start: '2026-04-05', end: '2026-04-06' }, { name: 'Fête des Mères', start: '2026-05-31', end: '2026-05-31' },
+  { name: 'Foire locale', start: '2026-06-12', end: '2026-06-15' }, { name: 'Rentrée', start: '2026-08-24', end: '2026-09-13' },
+  { name: 'Black Friday', start: '2026-11-23', end: '2026-11-30' }, { name: 'Noël', start: '2026-12-01', end: '2026-12-24' },
+];
+const periods = {
+  Année: { label: '2026', start: '2026-01-01', end: '2026-12-31', ticks: ['Jan', 'Fév', 'Mars', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc'] },
+  Semestre: { label: 'S2 2026 — Juillet → Décembre 2026', start: '2026-07-01', end: '2026-12-31', ticks: ['Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'] },
+  Trimestre: { label: 'T3 2026', start: '2026-07-01', end: '2026-09-30', ticks: ['Juillet', 'Août', 'Septembre'] },
+  Mois: { label: 'Septembre 2026', start: '2026-09-01', end: '2026-09-30', ticks: ['01', '05', '10', '15', '20', '25', '30'] },
+  Semaine: { label: 'Semaine du 14 septembre 2026', start: '2026-09-14', end: '2026-09-20', ticks: ['Lun 14', 'Mar 15', 'Mer 16', 'Jeu 17', 'Ven 18', 'Sam 19', 'Dim 20'] },
+} as const;
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
+function date(date: string) { return new Date(`${date}T00:00:00`); }
+function fmt(start: string, end: string) { return new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short' }).formatRange(date(start), date(end)); }
+function overlaps(item: { startDate?: string; endDate?: string; start?: string; end?: string }, start: Date, end: Date) {
+  const itemStart = date(item.startDate ?? item.start!); const itemEnd = date(item.endDate ?? item.end!);
+  return itemStart <= end && itemEnd >= start;
 }
-
-function formatRange(promotion: Promotion) {
-  return new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short' }).formatRange(new Date(promotion.startDate), new Date(promotion.endDate));
+function position(startDate: string, endDate: string, start: Date, end: Date, minWidth: number) {
+  const total = Math.max(1, Math.round((end.getTime() - start.getTime()) / dayMs) + 1);
+  const startOffset = Math.max(0, Math.round((date(startDate).getTime() - start.getTime()) / dayMs));
+  const endOffset = Math.min(total, Math.round((date(endDate).getTime() - start.getTime()) / dayMs) + 1);
+  const left = (startOffset / total) * 100;
+  const width = Math.max(minWidth, ((endOffset - startOffset) / total) * 100);
+  return { left: `${Math.min(left, 98)}%`, width: `${Math.min(width, 100 - left)}%` };
 }
-
-function timelinePosition(promotion: Promotion) {
-  const start = Math.round((new Date(promotion.startDate).getTime() - timelineStart.getTime()) / day);
-  const end = Math.round((new Date(promotion.endDate).getTime() - timelineStart.getTime()) / day);
-  const left = clamp((start / totalDays) * 100, 0, 96);
-  const width = clamp(((end - start + 1) / totalDays) * 100, 8, 34);
-  return { left: `${left}%`, width: `${Math.min(width, 100 - left)}%` };
+function layoutRows(items: Promotion[]) {
+  const rows: Promotion[][] = [];
+  return items.map((promotion) => {
+    const start = date(promotion.startDate); const end = date(promotion.endDate);
+    let row = rows.findIndex((rowItems) => rowItems.every((item) => date(item.endDate) < start || date(item.startDate) > end));
+    if (row === -1) { row = rows.length; rows.push([]); }
+    rows[row].push(promotion);
+    return { promotion, row };
+  });
 }
-
-function detailLevel(zoom: string) {
-  if (zoom === 'Année' || zoom === 'Semestre') return 'compact';
-  if (zoom === 'Trimestre' || zoom === 'Mois') return 'standard';
-  return 'detailed';
+function blockText(zoom: string, promotion: Promotion) {
+  const line = getLine(promotion.productLineId).name; const channel = getChannel(promotion.channelIds[0]).name;
+  if (zoom === 'Année') return <span className="sr-only">{line} — {channel}</span>;
+  if (zoom === 'Semestre') return <><strong>{line}</strong><span>{channel}</span></>;
+  if (zoom === 'Trimestre') return <><strong>{line}</strong><span>{channel} · {promotion.mechanic}</span></>;
+  if (zoom === 'Mois') return <><strong>{line}</strong><span>{channel} · {promotion.mechanic}</span><span>{promotion.controlStatus}</span></>;
+  return <><strong>{promotion.name}</strong><span>{line} · {channel}</span><span>{fmt(promotion.startDate, promotion.endDate)} · {promotion.mechanic}</span><span>Marge {promotion.marginRate}% · ROI {promotion.roi}×</span></>;
 }
-
-function riskTone(promotion: Promotion) {
-  if (promotion.controlStatus === 'Problème') return 'border-red-200 bg-red-50 text-red-900';
-  if (promotion.controlStatus === 'Vigilance') return 'border-orange-200 bg-orange-50 text-orange-900';
-  return 'border-mint-200 bg-mint-100 text-navy-900';
-}
-
-function PromotionBlock({ promotion, zoom, row, onSelect }: { promotion: Promotion; zoom: string; row: number; onSelect: (promotion: Promotion) => void }) {
-  const level = detailLevel(zoom);
-  const line = getLine(promotion.productLineId);
-  const channel = getChannel(promotion.channelIds[0]);
-
-  return (
-    <button
-      className={cn(
-        'group absolute rounded-2xl border px-3 py-2 text-left shadow-sm transition hover:z-20 hover:-translate-y-0.5 hover:shadow-lg focus:z-20 focus:outline-none focus:ring-2 focus:ring-mint-300',
-        riskTone(promotion),
-      )}
-      onClick={() => onSelect(promotion)}
-      style={{ ...timelinePosition(promotion), top: `${row * 74 + 18}px` }}
-      type="button"
-    >
-      <p className="truncate text-sm font-bold">{level === 'compact' ? line.name : promotion.name}</p>
-      <p className="mt-0.5 truncate text-xs opacity-80">{channel.name}</p>
-      {level !== 'compact' && <p className="mt-1 truncate text-xs opacity-80">{formatRange(promotion)} · {promotion.mechanic}</p>}
-      {level === 'detailed' && <p className="mt-1 truncate text-xs opacity-80">Marge {promotion.marginRate}% · ROI {promotion.roi}x</p>}
-      <div className="pointer-events-none absolute left-3 top-[calc(100%+10px)] z-30 hidden w-64 rounded-2xl border border-navy-100 bg-white p-4 text-navy-900 shadow-soft group-hover:block group-focus:block">
-        <p className="font-bold">{line.name}</p>
-        <p className="mt-1 text-sm text-navy-600">{channel.name}</p>
-        <p className="mt-2 text-sm text-navy-600">{formatRange(promotion)}</p>
-        <p className="text-sm text-navy-600">{promotion.mechanic}</p>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-          <span className="rounded-xl bg-navy-50 p-2">Marge {promotion.marginRate}%</span>
-          <span className="rounded-xl bg-navy-50 p-2">ROI {promotion.roi}x</span>
-        </div>
-      </div>
-    </button>
-  );
+function tone(promotion: Promotion) {
+  if (promotion.controlStatus === 'Problème') return 'bg-red-100 text-red-950 border-red-200 hover:bg-red-200';
+  if (promotion.controlStatus === 'Vigilance') return 'bg-orange-100 text-orange-950 border-orange-200 hover:bg-orange-200';
+  return 'bg-mint-100 text-navy-950 border-mint-200 hover:bg-mint-200';
 }
 
 export default function Calendar() {
+  const [zoom, setZoom] = useState<keyof typeof periods>('Mois');
   const [selected, setSelected] = useState(promotions[1]);
-  const [zoom, setZoom] = useState('Mois');
-  const visiblePromotions = useMemo(() => promotions.slice(0, 12), []);
-  const riskyCount = visiblePromotions.filter((promotion) => promotion.controlStatus === 'Problème' || promotion.controlStatus === 'Vigilance').length;
+  const period = periods[zoom];
+  const start = date(period.start); const end = date(period.end);
+  const visible = useMemo(() => promotions.filter((promotion) => overlaps(promotion, start, end)).sort((a, b) => +date(a.startDate) - +date(b.startDate)), [start, end]);
+  const laidOut = layoutRows(visible);
+  const rowHeight = zoom === 'Année' ? 26 : zoom === 'Semestre' ? 58 : zoom === 'Trimestre' ? 68 : zoom === 'Mois' ? 88 : 118;
+  const height = Math.max(rowHeight + 34, (Math.max(0, ...laidOut.map((item) => item.row)) + 1) * rowHeight + 36);
+  const events = commercialEvents.filter((event) => overlaps(event, start, end));
+  const minWidth = zoom === 'Année' ? 1.1 : zoom === 'Semaine' ? 10 : 4;
+  const firstProduct = getProduct(selected.products[0]?.productId);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-7">
+    <div className="mx-auto max-w-7xl space-y-6">
       <section className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-mint-600">Planning promotionnel</p>
-          <h1 className="mt-3 text-3xl font-black tracking-tight">Calendrier</h1>
-          <p className="mt-2 max-w-2xl text-navy-500">Visualisez la charge commerciale, les chevauchements et les promotions à risque sur une frise temporelle horizontale.</p>
-        </div>
-        <Tabs active={zoom} items={zoomLevels} onSelect={setZoom} />
+        <div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-mint-600">Planning promotionnel</p><h1 className="mt-3 text-3xl font-black tracking-tight">Calendrier</h1><p className="mt-2 max-w-2xl text-navy-500">Une frise horizontale pour comprendre la charge, les chevauchements et les temps forts.</p></div>
+        <Tabs active={zoom} items={zoomLevels} onSelect={(item) => setZoom(item as keyof typeof periods)} />
       </section>
 
-      <Card className="p-5">
-        <div className="grid gap-3 md:grid-cols-4">
-          <input className="rounded-xl border border-navy-100 p-2.5" placeholder="Recherche" />
-          <select className="rounded-xl border border-navy-100 p-2.5"><option>Canal</option></select>
-          <select className="rounded-xl border border-navy-100 p-2.5"><option>Produit</option></select>
-          <select className="rounded-xl border border-navy-100 p-2.5"><option>Statut</option></select>
+      <Card className="p-4">
+        <div className="grid gap-2 md:grid-cols-4 xl:grid-cols-8">
+          {['Recherche', 'Canal', 'Produit', 'Gamme', 'Enseigne', 'Statut', 'Responsable', 'Mécanique'].map((label, index) => index === 0 ? <input key={label} className="rounded-xl border border-navy-100 px-3 py-2 text-sm" placeholder={label} /> : <select key={label} className="rounded-xl border border-navy-100 px-3 py-2 text-sm"><option>{label}</option></select>)}
         </div>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <Card className="overflow-hidden p-0">
-          <div className="flex flex-col gap-4 border-b border-navy-100 p-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-xl font-bold">Frise juillet à octobre 2026</h2>
-              <p className="mt-1 text-sm text-navy-500">Le niveau de zoom modifie automatiquement le détail affiché dans chaque bloc.</p>
-            </div>
-            <div className="flex gap-2 text-xs text-navy-500">
-              <span className="rounded-full bg-mint-100 px-3 py-1">Conforme</span>
-              <span className="rounded-full bg-orange-50 px-3 py-1">À vérifier</span>
-              <span className="rounded-full bg-red-50 px-3 py-1">Problème</span>
-            </div>
+          <div className="flex flex-col gap-4 border-b border-navy-100 p-5 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3"><button className="rounded-full border border-navy-100 p-2 text-navy-500" type="button"><ChevronLeft size={16} /></button><div><h2 className="text-xl font-bold">{period.label}</h2><p className="text-sm text-navy-500">{visible.length} promotions visibles · hauteur ajustée aux chevauchements</p></div><button className="rounded-full border border-navy-100 p-2 text-navy-500" type="button"><ChevronRight size={16} /></button></div>
+            <Button variant="secondary"><Plus className="mr-2" size={16} />Ajouter un temps fort</Button>
           </div>
-
-          <div className="overflow-x-auto p-6">
-            <div className="min-w-[980px]">
-              <div className="grid grid-cols-4 border-b border-navy-100 pb-3 text-sm font-bold uppercase tracking-[0.14em] text-navy-400">
-                {monthLabels.map((month) => <div key={month}>{month}</div>)}
-              </div>
-              <div className="relative mt-4 h-[940px] rounded-3xl bg-gradient-to-r from-navy-50 via-white to-navy-50">
-                <div className="absolute inset-y-0 left-1/4 w-px bg-navy-100" />
-                <div className="absolute inset-y-0 left-1/2 w-px bg-navy-100" />
-                <div className="absolute inset-y-0 left-3/4 w-px bg-navy-100" />
-                <div className="absolute left-[46%] top-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">Rentrée</div>
-                <div className="absolute left-[84%] top-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">Black Friday</div>
-                <div className="absolute left-[93%] top-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">Noël</div>
-                {visiblePromotions.map((promotion, index) => (
-                  <PromotionBlock key={promotion.id} promotion={promotion} zoom={zoom} row={index} onSelect={setSelected} />
-                ))}
+          <div className="overflow-x-auto p-5">
+            <div className="min-w-[920px]">
+              <div className="grid text-xs font-bold uppercase tracking-[0.12em] text-navy-400" style={{ gridTemplateColumns: `repeat(${period.ticks.length}, minmax(0, 1fr))` }}>{period.ticks.map((tick) => <div key={tick}>{tick}</div>)}</div>
+              <div className="relative mt-3 rounded-3xl bg-navy-50/70" style={{ height }}>
+                {period.ticks.slice(1).map((tick, index) => <div key={tick} className="absolute inset-y-0 w-px bg-white" style={{ left: `${((index + 1) / period.ticks.length) * 100}%` }} />)}
+                {events.map((event) => <div key={event.name} className="absolute top-2 h-5 rounded-full border border-blue-100 bg-blue-50/90 px-2 text-[11px] font-semibold text-blue-700" style={position(event.start, event.end, start, end, 2)}>{event.name}</div>)}
+                {laidOut.map(({ promotion, row }) => <button key={promotion.id} className={cn('group absolute overflow-visible rounded-xl border px-2 py-1.5 text-left text-xs shadow-sm transition hover:z-20 focus:z-20 focus:outline-none focus:ring-2 focus:ring-mint-300', zoom !== 'Année' && 'min-h-10', tone(promotion))} onClick={() => setSelected(promotion)} style={{ ...position(promotion.startDate, promotion.endDate, start, end, minWidth), top: 32 + row * rowHeight }} type="button"><span className="flex flex-col leading-snug">{blockText(zoom, promotion)}</span><span className="pointer-events-none absolute left-0 top-[calc(100%+8px)] z-30 hidden w-64 rounded-2xl border border-navy-100 bg-white p-4 text-navy-900 shadow-soft group-hover:block group-focus:block"><strong>{getLine(promotion.productLineId).name}</strong><span className="mt-1 block text-sm text-navy-600">{getChannel(promotion.channelIds[0]).name}</span><span className="mt-2 block text-sm text-navy-600">{fmt(promotion.startDate, promotion.endDate)} · {promotion.mechanic}</span><span className="mt-2 block text-sm text-navy-600">Marge {promotion.marginRate}% · ROI {promotion.roi}×</span></span></button>)}
               </div>
             </div>
           </div>
@@ -138,36 +108,12 @@ export default function Calendar() {
 
         <aside className="space-y-4">
           <Card>
-            <p className="text-sm font-semibold uppercase tracking-[0.14em] text-navy-400">Synthèse</p>
-            <div className="mt-5 grid gap-3">
-              <div className="rounded-2xl bg-navy-50 p-4"><p className="text-2xl font-black">{visiblePromotions.length}</p><p className="text-sm text-navy-500">promotions visibles</p></div>
-              <div className="rounded-2xl bg-orange-50 p-4"><p className="text-2xl font-black">{riskyCount}</p><p className="text-sm text-orange-700">opérations à surveiller</p></div>
-              <div className="rounded-2xl bg-blue-50 p-4"><p className="text-2xl font-black">3</p><p className="text-sm text-blue-700">temps forts commerciaux</p></div>
-            </div>
-          </Card>
-
-          <Card>
             <h2 className="text-xl font-bold">{selected.name}</h2>
-            <p className="mt-2 text-sm text-navy-500">{getLine(selected.productLineId).name} · {formatRange(selected)}</p>
+            <p className="mt-2 text-sm text-navy-500">{getLine(selected.productLineId).name} · {fmt(selected.startDate, selected.endDate)}</p>
             <div className="mt-4 flex flex-wrap gap-2"><StatusBadge status={selected.controlStatus} /><StatusBadge status={selected.operationalStatus} /></div>
-            <div className="mt-5 rounded-2xl bg-navy-50 p-4 text-sm text-navy-600">
-              <p>{getChannel(selected.channelIds[0]).name} · {selected.mechanic}</p>
-              <p className="mt-1">Marge {selected.marginRate}% · ROI {selected.roi}x</p>
-            </div>
-            {selected.controlStatus !== 'Conforme' && (
-              <div className="mt-4 flex gap-3 rounded-2xl border border-orange-100 bg-orange-50 p-4 text-sm text-orange-800">
-                <AlertCircle className="mt-0.5 shrink-0" size={17} />
-                <p>{selected.checks[0]?.explanation}</p>
-              </div>
-            )}
-            <div className="mt-6 grid gap-2">
-              <Link href={`/promotions/${selected.id}`}><Button className="w-full"><ExternalLink className="mr-2" size={16} />Ouvrir</Button></Link>
-              <Button variant="secondary"><Copy className="mr-2" size={16} />Dupliquer</Button>
-              <Button variant="secondary"><RotateCcw className="mr-2" size={16} />Réutiliser</Button>
-              <Button variant="secondary"><CalendarRange className="mr-2" size={16} />Modifier les dates</Button>
-              <Button variant="secondary"><Move className="mr-2" size={16} />Déplacer</Button>
-              <Button variant="secondary"><Archive className="mr-2" size={16} />Archiver</Button>
-            </div>
+            <dl className="mt-5 space-y-2 text-sm text-navy-600"><div><dt className="font-semibold text-navy-900">Produit</dt><dd>{firstProduct?.name} · {firstProduct?.ean.code}</dd></div><div><dt className="font-semibold text-navy-900">Canal</dt><dd>{getChannel(selected.channelIds[0]).name}</dd></div><div><dt className="font-semibold text-navy-900">Mécanique</dt><dd>{selected.mechanic}</dd></div><div><dt className="font-semibold text-navy-900">Performance</dt><dd>Marge {selected.marginRate}% · ROI {selected.roi}×</dd></div></dl>
+            {selected.controlStatus !== 'Conforme' && <div className="mt-4 flex gap-3 rounded-2xl border border-orange-100 bg-orange-50 p-4 text-sm text-orange-800"><AlertCircle className="mt-0.5 shrink-0" size={17} /><p>{selected.checks[0]?.explanation}</p></div>}
+            <Link href={`/promotions/${selected.id}`}><Button className="mt-6 w-full"><ExternalLink className="mr-2" size={16} />Ouvrir la promotion</Button></Link>
           </Card>
         </aside>
       </div>
