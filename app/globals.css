@@ -1,0 +1,4 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root{color-scheme:light} body{background:#f6f8f7;color:#0d2538} *{box-sizing:border-box} .shadow-soft{box-shadow:0 16px 40px rgba(13,37,56,.08)}
