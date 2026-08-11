@@ -1,2 +1,5 @@
-import { Card, Button } from '@/components/ui';
-export default function NewPromotion(){return <div className='space-y-6'><h1 className='text-3xl font-black'>Nouvelle promotion</h1><Card><p className='font-semibold'>Wizard multi-étapes prévu en phase 3.</p><p className='mt-2 text-navy-500'>La phase actuelle se limite volontairement au shell, au dashboard, au calendrier et à la liste promotions.</p><Button className='mt-4'>Enregistrer comme brouillon</Button></Card></div>}
+import { PromotionWizard } from '@/components/promotion-wizard';
+
+export default function NewPromotion() {
+  return <PromotionWizard />;
+}

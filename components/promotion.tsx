@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { getChannel, getLine } from '@/data/mock';
 import { euro, shortDate } from '@/lib/utils';
@@ -56,6 +57,12 @@ export function AiRecommendation({ promo }: { promo: Promotion }) {
 
 export function PromotionTable({ items }: { items: Promotion[] }) {
   const router = useRouter();
+  const [localItems, setLocalItems] = useState<Promotion[]>([]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setLocalItems(JSON.parse(window.localStorage.getItem('promo-pulse-promotions') || '[]')), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const displayedItems = [...localItems, ...items];
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-navy-100 bg-white">
@@ -65,7 +72,7 @@ export function PromotionTable({ items }: { items: Promotion[] }) {
           <tr>{['Enseigne', 'Promotion', 'Produits', 'Période', 'Contrôle', 'Statut'].map((heading) => <th className="whitespace-nowrap p-4" key={heading}>{heading}</th>)}</tr>
         </thead>
         <tbody>
-          {items.map((promotion) => (
+          {displayedItems.map((promotion) => (
             <tr className="group cursor-pointer border-t border-navy-100 transition hover:bg-navy-50/70 focus-within:bg-navy-50/70" key={promotion.id} onClick={() => router.push(`/promotions/${promotion.id}`)}>
               <td className="w-[14%] truncate p-4 font-semibold" title={getChannel(promotion.channelIds[0]).name}><Link className="block" href={`/promotions/${promotion.id}`}>{getChannel(promotion.channelIds[0]).name}</Link></td>
               <td className="w-[25%] truncate p-4 font-semibold text-navy-900" title={promotion.name.replace(`${getChannel(promotion.channelIds[0]).name} — `, '')}><Link className="block" href={`/promotions/${promotion.id}`}>{promotion.name.replace(`${getChannel(promotion.channelIds[0]).name} — `, '')}</Link></td>
