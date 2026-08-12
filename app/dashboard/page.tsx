@@ -24,14 +24,14 @@ function ActionLine({ id, icon, title, action, promotions: items, category }: { 
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="border-t border-navy-100 first:border-t-0">
+    <div className="pp-action-row border-t border-navy-100 px-1 first:border-t-0">
       <div className="flex items-center gap-3 py-4">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy-50 text-navy-700">{icon}</span>
+        <span className="pp-action-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-navy-50 text-navy-700">{icon}</span>
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-navy-900">{title}</p>
           <Link className="mt-0.5 inline-block text-sm font-semibold text-mint-700 hover:text-mint-800" href="/promotions">{action}</Link>
         </div>
-        <button aria-expanded={open} aria-controls={id} className="rounded-full border border-navy-100 p-2 text-navy-500 transition hover:bg-navy-50" onClick={() => setOpen(!open)} type="button">
+        <button aria-expanded={open} aria-controls={id} className="rounded-[9px] border border-navy-100 p-2 text-navy-500 transition hover:border-mint-300 hover:bg-[#EEF4EC] focus:outline-none focus:ring-2 focus:ring-mint-300" onClick={() => setOpen(!open)} type="button">
           {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
       </div>
@@ -63,8 +63,8 @@ export default function Dashboard() {
   const displayedPromotions = showAllPromotions ? upcomingPromotions : upcomingPromotions.slice(0, 2);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
-      <section className="rounded-[2rem] bg-white px-7 py-7 shadow-soft ring-1 ring-navy-100">
+    <div className="pp-editorial-page mx-auto max-w-6xl space-y-10">
+      <section className="pp-dashboard-hero px-7 py-8 md:px-9 md:py-9">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <h1 className="text-3xl font-black tracking-tight text-navy-900 md:text-4xl">Bonjour {user.firstName}</h1>
@@ -72,7 +72,7 @@ export default function Dashboard() {
           </div>
           <Button className="self-start" variant="ghost" onClick={() => setShowKpiSettings(!showKpiSettings)}><Settings2 className="mr-2" size={16} />Modifier les KPI</Button>
         </div>
-        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="pp-kpi-grid mt-10 grid gap-x-7 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
           {visibleKpis.map((kpi) => (
             <div key={kpi.label} className="border-l border-navy-100 pl-5 first:border-l-0 first:pl-0 sm:[&:nth-child(3)]:border-l-0 sm:[&:nth-child(3)]:pl-0 lg:[&:nth-child(3)]:border-l lg:[&:nth-child(3)]:pl-5">
               <p className="text-sm font-semibold text-navy-500">{kpi.label}</p>
@@ -84,8 +84,8 @@ export default function Dashboard() {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="p-6">
-          <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-navy-400">Actions importantes</h2>
+        <Card className="pp-editorial-card p-6 md:p-7">
+          <h2 className="pp-section-label text-sm font-bold uppercase tracking-[0.16em] text-navy-400">Actions importantes</h2>
           <div className="mt-4">
             <ActionLine id="problems" category="regulatory" icon={<AlertTriangle size={17} className="text-red-600" />} title={`${problemPromotions.length} promotions présentent un problème réglementaire`} action="Voir les promotions" promotions={problemPromotions} />
             <ActionLine id="margins" category="performance" icon={<TrendingDown size={17} className="text-orange-600" />} title={`${lowMarginPromotions.length} promotions sont sous votre objectif de marge`} action="Analyser" promotions={lowMarginPromotions} />
@@ -93,14 +93,14 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="pp-editorial-card p-6 md:p-7">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-navy-400">Prochaines promotions</h2>
+            <h2 className="pp-section-label text-sm font-bold uppercase tracking-[0.16em] text-navy-400">Prochaines promotions</h2>
             <Link className="text-sm font-semibold text-mint-700" href="/calendar">Voir le calendrier</Link>
           </div>
           <div className="mt-5 space-y-4">
             {displayedPromotions.map((promotion) => (
-              <Link key={promotion.id} href={`/promotions/${promotion.id}`} className="block rounded-2xl p-3 transition hover:bg-navy-50">
+              <Link key={promotion.id} href={`/promotions/${promotion.id}`} className="pp-promotion-link block rounded-[12px] p-3 transition hover:bg-navy-50">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="font-bold text-navy-900">{getChannel(promotion.channelIds[0]).name} — {getLine(promotion.productLineId).name}</p>

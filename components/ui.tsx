@@ -126,8 +126,8 @@ export function NavLink({
   return (
     <Link
       className={cn(
-        'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
-        active ? 'bg-mint-100 text-navy-900' : 'text-navy-100 hover:bg-navy-700 hover:text-white',
+        'flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-medium transition duration-150',
+        active ? 'bg-[#68C5A8] text-[#172A3A] shadow-[2px_2px_0_rgba(221,233,201,0.35)]' : 'text-white/75 hover:bg-white/[0.06] hover:text-white',
       )}
       href={href}
     >

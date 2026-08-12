@@ -65,7 +65,7 @@ export function PromotionTable({ items }: { items: Promotion[] }) {
   const displayedItems = [...localItems, ...items];
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-navy-100 bg-white">
+    <div className="pp-table-wrap overflow-x-auto rounded-2xl border border-navy-100 bg-white">
       <table className="w-full min-w-[860px] table-fixed text-left text-sm">
         <colgroup><col className="w-[14%]" /><col className="w-[25%]" /><col className="w-[18%]" /><col className="w-[19%]" /><col className="w-[12%]" /><col className="w-[12%]" /></colgroup>
         <thead className="bg-navy-50 text-navy-500">

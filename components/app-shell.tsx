@@ -36,11 +36,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
 
   return (
-    <div className="min-h-screen bg-[#f7f9f8] lg:flex">
-      <aside className="hidden w-72 bg-navy-900 p-5 text-white lg:block">
-        <div className="mb-8 rounded-2xl bg-white/5 p-4">
+    <div className="pp-shell min-h-screen lg:flex">
+      <aside className="pp-sidebar hidden w-72 p-5 text-white lg:block">
+        <div className="pp-brand-block mb-9 p-4">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-mint-500 text-sm font-black text-navy-900">PP</div>
+            <div className="pp-brand-mark flex size-10 items-center justify-center text-sm font-black text-navy-900">PP</div>
             <div>
               <p className="text-xl font-black tracking-tight">Promo Pulse</p>
               <p className="text-sm text-navy-100">{company.name}</p>
@@ -53,9 +53,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
       </aside>
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-navy-100 bg-white p-4 lg:hidden">
+      <header className="pp-mobile-header sticky top-0 z-10 flex items-center justify-between border-b p-4 lg:hidden">
         <div className="flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-mint-500 text-xs font-black text-navy-900">PP</div>
+          <div className="pp-brand-mark flex size-9 items-center justify-center text-xs font-black text-navy-900">PP</div>
           <b>Promo Pulse</b>
         </div>
         <SlidersHorizontal size={20} />

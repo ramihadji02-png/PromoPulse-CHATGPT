@@ -1,4 +1,145 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-:root{color-scheme:light} body{background:#f6f8f7;color:#0d2538} *{box-sizing:border-box} .shadow-soft{box-shadow:0 16px 40px rgba(13,37,56,.08)}
+
+/* PROMO PULSE VISUAL TEST — reversible editorial / organic / soft-brutalist theme */
+:root {
+  color-scheme: light;
+  --pp-canvas: #f7f8f3;
+  --pp-surface: #ffffff;
+  --pp-surface-soft: #eef4ec;
+  --pp-navy: #172a3a;
+  --pp-muted: #65736d;
+  --pp-mint: #68c5a8;
+  --pp-lime-soft: #dde9c9;
+  --pp-border: rgba(23, 42, 58, 0.08);
+  --pp-border-strong: rgba(23, 42, 58, 0.14);
+  --pp-shadow-card: 0 1px 2px rgba(23, 42, 58, 0.03), 0 8px 24px rgba(23, 42, 58, 0.045);
+}
+
+* { box-sizing: border-box; }
+body { background: var(--pp-canvas); color: var(--pp-navy); }
+.shadow-soft { box-shadow: var(--pp-shadow-card); }
+
+.pp-shell { background: var(--pp-canvas); }
+.pp-sidebar {
+  background: var(--pp-navy);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+.pp-brand-block {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.045);
+  border-radius: 18px 12px 18px 12px;
+}
+.pp-brand-mark {
+  background: var(--pp-mint);
+  border-radius: 10px 7px 10px 7px;
+  box-shadow: 2px 2px 0 rgba(221, 233, 201, 0.45);
+}
+.pp-mobile-header {
+  background: rgba(247, 248, 243, 0.96);
+  border-color: var(--pp-border);
+}
+
+.pp-editorial-page h1 {
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+.pp-editorial-page h2 { letter-spacing: -0.018em; }
+.pp-editorial-page :is(input, select) {
+  border-color: var(--pp-border-strong);
+  background: var(--pp-surface);
+  border-radius: 10px;
+  color: var(--pp-navy);
+  outline: none;
+}
+.pp-editorial-page :is(input, select):focus {
+  border-color: var(--pp-mint);
+  box-shadow: 0 0 0 3px rgba(104, 197, 168, 0.15);
+}
+.pp-editorial-card {
+  border: 1px solid var(--pp-border) !important;
+  border-radius: 22px 14px 20px 14px !important;
+  background: var(--pp-surface) !important;
+  box-shadow: var(--pp-shadow-card) !important;
+}
+.pp-operational-card {
+  border: 1px solid var(--pp-border) !important;
+  border-radius: 14px !important;
+  background: var(--pp-surface) !important;
+  box-shadow: 0 1px 2px rgba(23, 42, 58, 0.025) !important;
+}
+.pp-primary-action {
+  border-radius: 10px !important;
+  background: var(--pp-navy) !important;
+  color: white !important;
+  box-shadow: 3px 3px 0 rgba(104, 197, 168, 0.65) !important;
+  transform: translate(0, 0);
+}
+.pp-primary-action:hover {
+  background: #213a4d !important;
+  box-shadow: 1px 1px 0 rgba(104, 197, 168, 0.65) !important;
+  transform: translate(2px, 2px);
+}
+.pp-primary-action:focus-visible {
+  outline: 2px solid var(--pp-mint);
+  outline-offset: 3px;
+}
+.pp-section-label {
+  color: var(--pp-muted) !important;
+  font-size: 0.7rem !important;
+  letter-spacing: 0.17em !important;
+}
+
+.pp-dashboard-hero {
+  border: 1px solid var(--pp-border);
+  border-radius: 26px 15px 24px 15px;
+  background: var(--pp-surface);
+  box-shadow: var(--pp-shadow-card);
+}
+.pp-kpi-grid > div { border-color: var(--pp-border) !important; }
+.pp-kpi-grid p:first-child {
+  color: var(--pp-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+}
+.pp-kpi-grid p:last-child {
+  color: var(--pp-navy);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+}
+.pp-action-icon { background: var(--pp-surface-soft) !important; }
+.pp-action-row { border-color: var(--pp-border) !important; }
+.pp-action-row:hover { background: rgba(238, 244, 236, 0.45); }
+.pp-promotion-link:hover { background: var(--pp-surface-soft) !important; }
+
+.pp-calendar-controls { background: var(--pp-surface-soft) !important; }
+.pp-calendar-frame { border-radius: 14px !important; }
+.pp-calendar-track {
+  background-color: #f1f4ed !important;
+  border: 1px solid var(--pp-border);
+  border-radius: 10px !important;
+}
+.pp-calendar-gridline { background: rgba(23, 42, 58, 0.055) !important; }
+.pp-calendar-event { border-radius: 6px !important; box-shadow: none !important; }
+.pp-calendar-highlight { border-radius: 5px !important; }
+.pp-calendar-tooltip { border-radius: 12px !important; box-shadow: var(--pp-shadow-card) !important; }
+.pp-calendar-drawer { box-shadow: -12px 0 32px rgba(23, 42, 58, 0.1) !important; }
+
+.pp-promotions-filter { background: var(--pp-surface-soft) !important; }
+.pp-table-wrap {
+  border-color: var(--pp-border) !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+.pp-table-wrap thead { background: #f0f3ed !important; color: var(--pp-muted) !important; }
+.pp-table-wrap th {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.pp-table-wrap tbody tr { border-color: var(--pp-border) !important; }
+.pp-table-wrap tbody tr:hover { background: rgba(238, 244, 236, 0.62) !important; }
