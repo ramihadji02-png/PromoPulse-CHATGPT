@@ -17,7 +17,6 @@ import {
 import { usePathname } from 'next/navigation';
 import { company } from '@/data/mock';
 import { NavLink } from './ui';
-import { ThemeLab, useThemeLab } from './theme-lab';
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: Home },
@@ -35,15 +34,13 @@ const nav = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const { theme, selectTheme } = useThemeLab();
-  const labEnabled = path === '/dashboard' || path === '/calendar' || path === '/promotions';
 
   return (
-    <div className="pp-shell min-h-screen lg:flex" data-pp-theme={theme}>
-      <aside className="pp-sidebar hidden w-72 flex-col p-5 text-white lg:flex">
-        <div className="pp-brand-block mb-9 p-4">
+    <div className="pulse-shell min-h-screen bg-[#f7f9f8] lg:flex">
+      <aside className="pulse-sidebar hidden w-72 flex-col bg-navy-900 p-5 text-white lg:flex">
+        <div className="pulse-brand mb-9 p-4">
           <div className="flex items-center gap-3">
-            <div className="pp-brand-mark flex size-10 items-center justify-center text-sm font-black text-navy-900">PP</div>
+            <div className="pulse-brand-mark flex size-10 items-center justify-center text-sm font-black text-navy-900">PP</div>
             <div>
               <p className="text-xl font-black tracking-tight">Promo Pulse</p>
               <p className="text-sm text-navy-100">{company.name}</p>
@@ -55,16 +52,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <NavLink key={href} href={href} label={label} active={path.startsWith(href)} icon={<Icon size={17} strokeWidth={1.9} />} />
           ))}
         </nav>
-        {labEnabled && <ThemeLab theme={theme} onSelect={selectTheme} />}
       </aside>
-      <header className="pp-mobile-header sticky top-0 z-10 flex items-center justify-between border-b p-4 lg:hidden">
+      <header className="pulse-mobile-header sticky top-0 z-10 flex items-center justify-between border-b p-4 lg:hidden">
         <div className="flex items-center gap-3">
-          <div className="pp-brand-mark flex size-9 items-center justify-center text-xs font-black text-navy-900">PP</div>
+          <div className="pulse-brand-mark flex size-9 items-center justify-center text-xs font-black text-navy-900">PP</div>
           <b>Promo Pulse</b>
         </div>
         <SlidersHorizontal size={20} />
       </header>
-      <main className={labEnabled ? "pp-lab-scope flex-1 p-4 md:p-8 xl:p-10" : "flex-1 p-4 md:p-8 xl:p-10"}>{labEnabled && <div className="mb-5 lg:hidden"><ThemeLab theme={theme} onSelect={selectTheme} /></div>}{children}</main>
+      <main className="flex-1 p-4 md:p-8 xl:p-10">{children}</main>
     </div>
   );
 }

@@ -14,7 +14,7 @@ export function Button({
   return (
     <button
       className={cn(
-        'pp-button inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-mint-300 focus:ring-offset-2',
+        'pulse-button inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-mint-300 focus:ring-offset-2',
         variant === 'primary' && 'bg-mint-500 text-navy-900 hover:bg-mint-600',
         variant === 'secondary' && 'border border-navy-100 bg-white text-navy-900 hover:border-mint-300',
         variant === 'ghost' && 'text-navy-500 hover:bg-navy-50',
@@ -26,7 +26,7 @@ export function Button({
 }
 
 export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('pp-card rounded-3xl border border-navy-100 bg-white p-6 shadow-soft', className)} {...props} />;
+  return <div className={cn('pulse-card rounded-3xl border border-navy-100 bg-white p-6 shadow-soft', className)} {...props} />;
 }
 
 export function Badge({
@@ -39,7 +39,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        'pp-badge inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold',
+        'pulse-badge inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold',
         tone === 'success' && 'bg-green-50 text-green-700',
         tone === 'warning' && 'bg-orange-50 text-orange-700',
         tone === 'danger' && 'bg-red-50 text-red-700',
@@ -65,6 +65,17 @@ export function StatusBadge({ status }: { status: ControlStatus | OperationalSta
             : 'info';
 
   return <Badge tone={tone}>{status}</Badge>;
+}
+
+export function PulseLoader({ label = 'Analyse en cours' }: { label?: string }) {
+  return (
+    <span aria-live="polite" className="pulse-loader" role="status">
+      <svg aria-hidden="true" viewBox="0 0 86 18">
+        <path d="M1 9h22l5-6 7 12 7-9 5 3h16l5-6 7 12 5-6h5" />
+      </svg>
+      <span>{label}</span>
+    </span>
+  );
 }
 
 export function KpiCard({
@@ -127,7 +138,7 @@ export function NavLink({
     <Link
       data-active={active || undefined}
       className={cn(
-        'pp-nav-link flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-medium transition duration-150',
+        'pulse-nav-link flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-medium transition duration-150',
         active ? 'bg-[#68C5A8] text-[#172A3A] shadow-[2px_2px_0_rgba(221,233,201,0.35)]' : 'text-white/75 hover:bg-white/[0.06] hover:text-white',
       )}
       href={href}
@@ -148,13 +159,13 @@ export function Tabs({
   onSelect?: (item: string) => void;
 }) {
   return (
-    <div className="pp-tabs flex flex-wrap gap-2">
+    <div className="pulse-tabs flex flex-wrap gap-2">
       {items.map((item) => (
         <button
           key={item}
           onClick={() => onSelect?.(item)}
           className={cn(
-            'pp-tab rounded-full px-3.5 py-2 text-sm font-semibold transition',
+            'pulse-tab rounded-full px-3.5 py-2 text-sm font-semibold transition',
             item === active ? 'bg-navy-900 text-white' : 'border border-navy-100 bg-white text-navy-500 hover:border-mint-300',
           )}
           type="button"

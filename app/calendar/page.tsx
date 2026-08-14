@@ -67,6 +67,7 @@ function blockText(zoom: string, promotion: Promotion) {
 export default function Calendar() {
   const [zoom, setZoom] = useState<keyof typeof periods>('Mois');
   const [selected, setSelected] = useState<Promotion | null>(null);
+  const [highlightedChannel, setHighlightedChannel] = useState<string | null>(null);
   const period = periods[zoom];
   const start = date(period.start); const end = date(period.end);
   const visible = useMemo(() => promotions.filter((promotion) => overlaps(promotion, start, end)).sort((a, b) => +date(a.startDate) - +date(b.startDate)), [start, end]);
@@ -76,44 +77,48 @@ export default function Calendar() {
   const events = commercialEvents.filter((event) => overlaps(event, start, end));
   const minWidth = zoom === 'Année' ? 1.1 : zoom === 'Semaine' ? 10 : 4;
   const firstProduct = selected ? getProduct(selected.products[0]?.productId) : undefined;
+  const today = new Date().toISOString().slice(0, 10);
+  const showToday = date(today) >= start && date(today) <= end;
+  const todayPosition = showToday ? position(today, today, start, end, 0).left : undefined;
 
   return (
-    <div className="pp-editorial-page mx-auto max-w-7xl space-y-8">
+    <div className="product-page mx-auto max-w-7xl space-y-8">
       <section className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-mint-600">Planning promotionnel</p><h1 className="mt-3 text-3xl font-black tracking-tight">Calendrier</h1><p className="mt-2 max-w-2xl text-navy-500">Une frise horizontale pour comprendre la charge, les chevauchements et les temps forts.</p></div>
         <Tabs active={zoom} items={zoomLevels} onSelect={(item) => setZoom(item as keyof typeof periods)} />
       </section>
 
-      <Card className="pp-operational-card pp-calendar-controls p-4">
+      <Card className="operational-panel calendar-controls p-4">
         <div className="grid gap-2 md:grid-cols-4 xl:grid-cols-8">
           {['Recherche', 'Canal', 'Produit', 'Gamme', 'Enseigne', 'Statut', 'Responsable', 'Mécanique'].map((label, index) => index === 0 ? <input key={label} className="rounded-[10px] border border-navy-100 px-3 py-2 text-sm" placeholder={label} /> : <select key={label} className="rounded-[10px] border border-navy-100 px-3 py-2 text-sm"><option>{label}</option></select>)}
         </div>
       </Card>
 
-      <Card className="pp-operational-card pp-calendar-frame overflow-hidden p-0">
+      <Card className="operational-panel calendar-frame overflow-hidden p-0">
           <div className="flex flex-col gap-4 border-b border-navy-100 p-5 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3"><button className="rounded-[9px] border border-navy-100 p-2 text-navy-500 transition hover:border-mint-300 hover:bg-white" type="button"><ChevronLeft size={16} /></button><div><h2 className="text-xl font-bold">{period.label}</h2><p className="text-sm text-navy-500">{visible.length} promotions visibles · hauteur ajustée aux chevauchements</p></div><button className="rounded-[9px] border border-navy-100 p-2 text-navy-500 transition hover:border-mint-300 hover:bg-white" type="button"><ChevronRight size={16} /></button></div>
             <Button variant="secondary"><Plus className="mr-2" size={16} />Ajouter un temps fort</Button>
           </div>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-navy-100 px-5 py-3 text-xs text-navy-600">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-navy-100 px-5 py-3 text-xs text-navy-600">
             <span className="font-bold uppercase tracking-[0.14em] text-navy-400">Enseignes</span>
-            {['ch1', 'ch2', 'ch3', 'ch4', 'ch5'].map((id) => <span className="flex items-center gap-2" key={id}><span className={cn('h-2.5 w-2.5 rounded-full', channelColors[id].dot)} />{getChannel(id).name}</span>)}
+            {['ch1', 'ch2', 'ch3', 'ch4', 'ch5'].map((id) => <button className={cn('calendar-legend-item flex items-center gap-2', highlightedChannel && highlightedChannel !== id && 'is-muted', highlightedChannel === id && 'is-active')} key={id} onBlur={() => setHighlightedChannel(null)} onFocus={() => setHighlightedChannel(id)} onMouseEnter={() => setHighlightedChannel(id)} onMouseLeave={() => setHighlightedChannel(null)} type="button"><span className={cn('h-2.5 w-2.5 rounded-full', channelColors[id].dot)} />{getChannel(id).name}</button>)}
             <span className="ml-auto flex items-center gap-2"><AlertCircle size={13} className="text-red-600" /> Contrôle à vérifier</span>
           </div>
           <div className="overflow-x-auto p-5">
             <div className="min-w-[920px]">
               <div className="grid text-xs font-bold uppercase tracking-[0.12em] text-navy-400" style={{ gridTemplateColumns: `repeat(${period.ticks.length}, minmax(0, 1fr))` }}>{period.ticks.map((tick) => <div key={tick}>{tick}</div>)}</div>
-              <div className="pp-calendar-track relative mt-3 rounded-3xl bg-navy-50/70" style={{ height }}>
-                {period.ticks.slice(1).map((tick, index) => <div key={tick} className="pp-calendar-gridline absolute inset-y-0 w-px bg-white" style={{ left: `${((index + 1) / period.ticks.length) * 100}%` }} />)}
-                {events.map((event) => <div key={event.name} className="pp-calendar-highlight absolute top-2 h-5 rounded-full border border-blue-100 bg-blue-50/90 px-2 text-[11px] font-semibold text-blue-700" style={position(event.start, event.end, start, end, 2)}>{event.name}</div>)}
-                {laidOut.map(({ promotion, row }) => <button key={promotion.id} className={cn('pp-calendar-event group absolute overflow-visible rounded-xl border px-2 py-1.5 text-left text-xs shadow-sm transition hover:z-20 focus:z-20 focus:outline-none focus:ring-2 focus:ring-mint-300', zoom !== 'Année' && 'min-h-10', channelColors[promotion.channelIds[0]]?.bar ?? 'border-slate-200 bg-slate-100 text-slate-950')} onClick={() => setSelected(promotion)} style={{ ...position(promotion.startDate, promotion.endDate, start, end, minWidth), top: 32 + row * rowHeight }} type="button"><span className="flex flex-col leading-snug">{blockText(zoom, promotion)}</span>{promotion.controlStatus !== 'Conforme' && <AlertCircle className={cn('absolute right-1 top-1', promotion.controlStatus === 'Problème' ? 'text-red-600' : 'text-orange-600')} size={zoom === 'Année' ? 10 : 13} />}<span className="pp-calendar-tooltip pointer-events-none absolute left-0 top-[calc(100%+8px)] z-30 hidden w-64 rounded-2xl border border-navy-100 bg-white p-4 text-navy-900 shadow-soft group-hover:block group-focus:block"><strong>{getLine(promotion.productLineId).name}</strong><span className="mt-1 block text-sm text-navy-600">{getChannel(promotion.channelIds[0]).name}</span><span className="mt-2 block text-sm text-navy-600">{fmt(promotion.startDate, promotion.endDate)} · {promotion.mechanic}</span><span className="mt-2 block text-sm text-navy-600">{promotion.operationalStatus} · {promotion.controlStatus}</span></span></button>)}
+              <div className="calendar-track relative mt-3 rounded-3xl bg-navy-50/70" style={{ height }}>
+                {period.ticks.slice(1).map((tick, index) => <div key={tick} className="calendar-gridline absolute inset-y-0 w-px bg-white" style={{ left: `${((index + 1) / period.ticks.length) * 100}%` }} />)}
+                {showToday && <div className="calendar-today" style={{ left: todayPosition }}><span>Aujourd’hui</span></div>}
+                {events.map((event) => <div key={event.name} className="calendar-highlight absolute top-2 h-5 rounded-full border border-blue-100 bg-blue-50/90 px-2 text-[11px] font-semibold text-blue-700" style={position(event.start, event.end, start, end, 2)}>{event.name}</div>)}
+                {laidOut.map(({ promotion, row }) => <button key={promotion.id} className={cn('calendar-event group absolute overflow-visible rounded-xl border px-2 py-1.5 text-left text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-mint-300', zoom !== 'Année' && 'min-h-10', highlightedChannel && highlightedChannel !== promotion.channelIds[0] && 'is-muted', highlightedChannel === promotion.channelIds[0] && 'is-highlighted', channelColors[promotion.channelIds[0]]?.bar ?? 'border-slate-200 bg-slate-100 text-slate-950')} onBlur={() => setHighlightedChannel(null)} onClick={() => setSelected(promotion)} onFocus={() => setHighlightedChannel(promotion.channelIds[0])} onMouseEnter={() => setHighlightedChannel(promotion.channelIds[0])} onMouseLeave={() => setHighlightedChannel(null)} style={{ ...position(promotion.startDate, promotion.endDate, start, end, minWidth), top: 32 + row * rowHeight }} type="button"><span className="flex flex-col leading-snug">{blockText(zoom, promotion)}</span>{promotion.controlStatus !== 'Conforme' && <AlertCircle className={cn('absolute right-1 top-1', promotion.controlStatus === 'Problème' ? 'text-red-600' : 'text-orange-600')} size={zoom === 'Année' ? 10 : 13} />}<span className="calendar-tooltip pointer-events-none absolute left-0 top-[calc(100%+8px)] z-30 hidden w-64 rounded-2xl border border-navy-100 bg-white p-4 text-navy-900 shadow-soft group-hover:block group-focus:block"><strong>{getLine(promotion.productLineId).name}</strong><span className="mt-1 block text-sm text-navy-600">{getChannel(promotion.channelIds[0]).name}</span><span className="mt-2 block text-sm text-navy-600">{fmt(promotion.startDate, promotion.endDate)} · {promotion.mechanic}</span><span className="mt-2 block text-sm text-navy-600">{promotion.operationalStatus} · {promotion.controlStatus}</span></span></button>)}
               </div>
             </div>
           </div>
       </Card>
 
       {selected && <div className="fixed inset-0 z-50 flex justify-end bg-navy-950/20" onClick={() => setSelected(null)} role="presentation">
-        <aside aria-label="Détail de la promotion" className="pp-calendar-drawer h-full w-full max-w-md overflow-y-auto bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <aside aria-label="Détail de la promotion" className="calendar-drawer h-full w-full max-w-md overflow-y-auto bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
           <div className="flex items-start justify-between gap-4">
             <h2 className="text-xl font-bold">{selected.name}</h2>
             <button aria-label="Fermer" className="rounded-full border border-navy-100 p-2 text-navy-500 hover:bg-navy-50" onClick={() => setSelected(null)} type="button"><X size={18} /></button>
@@ -122,7 +127,7 @@ export default function Calendar() {
             <div className="mt-4 flex flex-wrap gap-2"><StatusBadge status={selected.controlStatus} /><StatusBadge status={selected.operationalStatus} /></div>
             <dl className="mt-5 space-y-2 text-sm text-navy-600"><div><dt className="font-semibold text-navy-900">Produit</dt><dd>{firstProduct?.name} · {firstProduct?.ean.code}</dd></div><div><dt className="font-semibold text-navy-900">Canal</dt><dd>{getChannel(selected.channelIds[0]).name}</dd></div><div><dt className="font-semibold text-navy-900">Mécanique</dt><dd>{selected.mechanic}</dd></div><div><dt className="font-semibold text-navy-900">Performance</dt><dd>Marge {selected.marginRate}% · ROI {selected.roi}×</dd></div></dl>
             {selected.controlStatus !== 'Conforme' && <div className="mt-4 flex gap-3 rounded-2xl border border-orange-100 bg-orange-50 p-4 text-sm text-orange-800"><AlertCircle className="mt-0.5 shrink-0" size={17} /><p>{selected.checks[0]?.explanation}</p></div>}
-            <Link href={`/promotions/${selected.id}`}><Button className="pp-primary-action mt-6 w-full"><ExternalLink className="mr-2" size={16} />Ouvrir la promotion</Button></Link>
+            <Link href={`/promotions/${selected.id}`}><Button className="primary-action mt-6 w-full"><ExternalLink className="mr-2" size={16} />Ouvrir la promotion</Button></Link>
         </aside>
       </div>}
     </div>
