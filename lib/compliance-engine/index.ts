@@ -36,3 +36,24 @@ export function runPrototypeCompliance(volume: number): ComplianceCheck[] {
     version: rule.version,
   }];
 }
+
+export type MechanicComplianceInput = {
+  category?: string;
+  equivalentBenefits: number[];
+  mechanicId: string;
+};
+
+/**
+ * Structural V1 check only. Equivalent benefits are aggregated so future
+ * validated rules can assess combined advantages. No legal ceiling is encoded.
+ */
+export function assessMechanicCompliance(input: MechanicComplianceInput) {
+  const cumulativeBenefit = input.equivalentBenefits.reduce((sum, benefit) => sum + Math.max(0, benefit), 0);
+  return {
+    status: 'Non vérifié' as const,
+    cumulativeBenefit,
+    explanation: input.category
+      ? `La catégorie « ${input.category} » est connue, mais aucune règle juridique validée n’est encore configurée pour cette mécanique.`
+      : 'La catégorie et le plafond applicable ne peuvent pas encore être déterminés.',
+  };
+}

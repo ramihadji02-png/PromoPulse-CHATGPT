@@ -117,6 +117,21 @@ tr:hover .row-affordance, tr:focus-within .row-affordance { opacity: 1; transfor
 .pulse-loader path { fill: none; stroke: var(--pulse-mint); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 120; stroke-dashoffset: 120; animation: pulse-draw 700ms ease forwards; }
 @keyframes pulse-draw { to { stroke-dashoffset: 0; } }
 
+/* Promotion mechanic decision surface */
+.mechanic-row { scroll-margin: 120px; }
+.mechanic-row::before { position: absolute; top: 12px; bottom: 12px; left: -12px; width: 3px; border-radius: 3px; content: ''; background: var(--pulse-mint); opacity: 0; transform: scaleY(.45); transition: opacity 160ms ease, transform 160ms ease; }
+.mechanic-row:hover { background: rgba(238,244,247,.38); }
+.mechanic-row.is-selected::before, .mechanic-row.is-highlighted::before { opacity: 1; transform: scaleY(1); }
+.mechanic-row.is-highlighted { background: var(--pulse-mint-soft); }
+.mechanic-select, .mechanic-preset { cursor: pointer; }
+.mechanic-select:focus-visible, .mechanic-preset:focus-visible { outline: 2px solid var(--pulse-mint); outline-offset: 2px; }
+.mechanic-popover { animation: mechanic-popover-in 150ms ease both; }
+@keyframes mechanic-popover-in { from { opacity: 0; transform: translateY(-3px); } }
+
+@media (max-width: 767px) {
+  .mechanic-popover { position: relative; top: auto; right: auto; width: 100%; margin-top: 14px; box-shadow: 0 8px 22px rgba(13,37,56,.09); }
+}
+
 @media (max-width: 1023px) {
   .dashboard-kpi:nth-child(2) { border-right: 0; }
   .dashboard-kpi:nth-child(-n+2) { border-bottom: 1px solid var(--pulse-line); }
