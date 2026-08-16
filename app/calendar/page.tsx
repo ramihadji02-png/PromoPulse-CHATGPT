@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, ChevronLeft, ChevronRight, ExternalLink, Plus, X } from 'lucide-react';
 import { Button, Card, StatusBadge, Tabs } from '@/components/ui';
 import { getChannel, getLine, getProduct, promotions } from '@/data/mock';
@@ -68,9 +68,15 @@ export default function Calendar() {
   const [zoom, setZoom] = useState<keyof typeof periods>('Mois');
   const [selected, setSelected] = useState<Promotion | null>(null);
   const [highlightedChannel, setHighlightedChannel] = useState<string | null>(null);
+  const [localPromotions, setLocalPromotions] = useState<Promotion[]>([]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setLocalPromotions(JSON.parse(window.localStorage.getItem('promo-pulse-promotions') || '[]')), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const allPromotions = useMemo(() => Array.from(new Map([...promotions, ...localPromotions].map((promotion) => [promotion.id, promotion])).values()), [localPromotions]);
   const period = periods[zoom];
   const start = date(period.start); const end = date(period.end);
-  const visible = useMemo(() => promotions.filter((promotion) => overlaps(promotion, start, end)).sort((a, b) => +date(a.startDate) - +date(b.startDate)), [start, end]);
+  const visible = useMemo(() => allPromotions.filter((promotion) => overlaps(promotion, start, end)).sort((a, b) => +date(a.startDate) - +date(b.startDate)), [allPromotions, start, end]);
   const laidOut = layoutRows(visible);
   const rowHeight = zoom === 'Année' ? 26 : zoom === 'Semestre' ? 58 : zoom === 'Trimestre' ? 68 : zoom === 'Mois' ? 88 : 118;
   const height = Math.max(rowHeight + 34, (Math.max(0, ...laidOut.map((item) => item.row)) + 1) * rowHeight + 36);

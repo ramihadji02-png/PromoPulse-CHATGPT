@@ -43,6 +43,11 @@ export type PromotionEconomicsResult = {
   marginRate: number;
   promotionalROI: number;
   forecastVolume: number;
+  inputVolume: number;
+  paidVolume: number;
+  freeVolume: number;
+  transactionCount: number;
+  remainderUnits: number;
   averageSellingPrice: number;
   marginGapToTarget: number;
   priceBreakdown: MechanicPriceBreakdown;
@@ -76,20 +81,19 @@ export function calculatePromotionEconomics(input: PromotionEconomicsInput): Pro
 }
 
 function calculateSingle(input: PromotionEconomicsInput): PromotionEconomicsResult {
-  const priceBreakdown = getMechanicPriceBreakdown(input);
-  const promotionalRevenue = priceBreakdown.averageSellingPrice * Math.max(0, input.forecastVolume);
-  const appliedUnitCost = input.mechanic.id === 'extra-quantity' && input.promotionalUnitCost != null ? input.promotionalUnitCost : input.unitCost;
-  const productCost = Math.max(0, appliedUnitCost) * Math.max(0, input.forecastVolume);
-  return finalize(input, promotionalRevenue, productCost, Math.max(0, input.forecastVolume), priceBreakdown);
+  const regular=Math.max(0,input.regularPrice), volume=Math.max(0,Math.floor(input.forecastVolume)), config=input.mechanic.configuration;
+  let revenue=0,physical=volume,paid=volume,free=0,transactions=volume,remainder=0;
+  if(input.mechanic.id==='second-product'){transactions=Math.floor(volume/2);remainder=volume%2;revenue=transactions*regular*(2-config.value/100)+remainder*regular;}
+  else if(input.mechanic.id==='multi-buy'){const bought=Math.max(1,Math.floor(config.boughtQuantity)),offered=Math.max(0,Math.floor(config.freeQuantity)),size=bought+offered;transactions=Math.floor(volume/size);remainder=volume%size;free=transactions*offered;paid=volume-free;revenue=paid*regular;}
+  else if(input.mechanic.id==='promo-pack'){const units=Math.max(1,Math.floor(config.packUnits+config.packExtraQuantity));transactions=volume;physical=volume*units;paid=physical;revenue=volume*Math.max(0,config.packPrice);}
+  else {const breakdown=getMechanicPriceBreakdown(input);revenue=breakdown.averageSellingPrice*volume;}
+  const breakdown=getMechanicPriceBreakdown(input), applied=input.mechanic.id==='extra-quantity'&&input.promotionalUnitCost!=null?input.promotionalUnitCost:input.unitCost;
+  return finalize(input,revenue,Math.max(0,applied)*physical,physical,breakdown,volume,paid,free,transactions,remainder);
 }
 
-function finalize(input: PromotionEconomicsInput, promotionalRevenue: number, productCost: number, forecastVolume: number, priceBreakdown: MechanicPriceBreakdown): PromotionEconomicsResult {
-  const totalExpenses = Math.max(0, input.expenses);
-  const grossMarginBeforeExpenses = promotionalRevenue - productCost;
-  const grossMargin = grossMarginBeforeExpenses - totalExpenses;
-  const marginRate = promotionalRevenue > 0 ? grossMargin / promotionalRevenue * 100 : 0;
-  const promotionalROI = totalExpenses > 0 ? grossMargin / totalExpenses : 0;
-  return { effectiveDiscount: priceBreakdown.effectiveDiscount, promotionalRevenue, productCost, totalExpenses, grossMarginBeforeExpenses, grossMargin, marginRate, promotionalROI, forecastVolume, averageSellingPrice: forecastVolume > 0 ? promotionalRevenue / forecastVolume : 0, marginGapToTarget: marginRate - input.marginTarget, priceBreakdown };
+function finalize(input: PromotionEconomicsInput, promotionalRevenue: number, productCost: number, forecastVolume: number, priceBreakdown: MechanicPriceBreakdown, inputVolume=forecastVolume, paidVolume=forecastVolume, freeVolume=0, transactionCount=forecastVolume, remainderUnits=0): PromotionEconomicsResult {
+  const totalExpenses=Math.max(0,input.expenses),before=promotionalRevenue-productCost,margin=before-totalExpenses,rate=promotionalRevenue>0?margin/promotionalRevenue*100:0;
+  return {effectiveDiscount:priceBreakdown.effectiveDiscount,promotionalRevenue,productCost,totalExpenses,grossMarginBeforeExpenses:before,grossMargin:margin,marginRate:rate,promotionalROI:totalExpenses>0?margin/totalExpenses:0,forecastVolume,inputVolume,paidVolume,freeVolume,transactionCount,remainderUnits,averageSellingPrice:forecastVolume>0?promotionalRevenue/forecastVolume:0,marginGapToTarget:rate-input.marginTarget,priceBreakdown};
 }
 
 export function getMechanicPriceBreakdown(input: PromotionEconomicsInput): MechanicPriceBreakdown {

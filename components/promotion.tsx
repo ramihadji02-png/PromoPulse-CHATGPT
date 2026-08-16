@@ -55,14 +55,17 @@ export function AiRecommendation({ promo }: { promo: Promotion }) {
   );
 }
 
-export function PromotionTable({ items }: { items: Promotion[] }) {
+export function PromotionTable({ items, status }: { items: Promotion[]; status?: string }) {
   const router = useRouter();
   const [localItems, setLocalItems] = useState<Promotion[]>([]);
   useEffect(() => {
     const timer = window.setTimeout(() => setLocalItems(JSON.parse(window.localStorage.getItem('promo-pulse-promotions') || '[]')), 0);
     return () => window.clearTimeout(timer);
   }, []);
-  const displayedItems = [...localItems, ...items];
+  const allItems = Array.from(new Map([...items, ...localItems].map((promotion) => [promotion.id, promotion])).values());
+  const displayedItems = status && status !== 'Toutes'
+    ? allItems.filter((promotion) => promotion.operationalStatus === status.replace(/s$/, ''))
+    : allItems;
 
   return (
     <div className="promotion-table-wrap overflow-x-auto rounded-2xl border border-navy-100 bg-white">

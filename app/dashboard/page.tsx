@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CalendarDays, ChevronDown, Info, Settings2, TrendingDown, TrendingUp } from 'lucide-react';
 import { Button, Card, StatusBadge } from '@/components/ui';
 import { getChannel, getLine, promotions, user } from '@/data/mock';
@@ -51,19 +51,25 @@ function ActionLine({ id, icon, title, action, promotions: items, category }: { 
 }
 
 export default function Dashboard() {
+  const [localPromotions, setLocalPromotions] = useState<Promotion[]>([]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setLocalPromotions(JSON.parse(window.localStorage.getItem('promo-pulse-promotions') || '[]')), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const allPromotions = useMemo(() => Array.from(new Map([...promotions, ...localPromotions].map((promotion) => [promotion.id, promotion])).values()), [localPromotions]);
   const [showKpiSettings, setShowKpiSettings] = useState(false);
   const [showAllPromotions, setShowAllPromotions] = useState(false);
-  const problemPromotions = promotions.filter((promotion) => promotion.controlStatus === 'Problème');
-  const lowMarginPromotions = promotions.filter((promotion) => promotion.marginRate < 15);
-  const upcomingPromotions = useMemo(() => promotions.filter((promotion) => promotion.operationalStatus !== 'Terminée').slice(0, 6), []);
+  const problemPromotions = allPromotions.filter((promotion) => promotion.controlStatus === 'Problème');
+  const lowMarginPromotions = allPromotions.filter((promotion) => promotion.marginRate < 15);
+  const upcomingPromotions = useMemo(() => allPromotions.filter((promotion) => promotion.operationalStatus !== 'Terminée').slice(0, 6), [allPromotions]);
   const displayedPromotions = showAllPromotions ? upcomingPromotions : upcomingPromotions.slice(0, 2);
-  const planned = promotions.filter((promotion) => promotion.operationalStatus === 'Planifiée').length;
-  const active = promotions.filter((promotion) => promotion.operationalStatus === 'En cours').length;
-  const finished = promotions.filter((promotion) => promotion.operationalStatus === 'Terminée').length;
-  const otherStatuses = promotions.length - planned - active - finished;
-  const plannedEnd = (planned / promotions.length) * 100;
-  const activeEnd = plannedEnd + (active / promotions.length) * 100;
-  const finishedEnd = activeEnd + (finished / promotions.length) * 100;
+  const planned = allPromotions.filter((promotion) => promotion.operationalStatus === 'Planifiée').length;
+  const active = allPromotions.filter((promotion) => promotion.operationalStatus === 'En cours').length;
+  const finished = allPromotions.filter((promotion) => promotion.operationalStatus === 'Terminée').length;
+  const otherStatuses = allPromotions.length - planned - active - finished;
+  const plannedEnd = (planned / allPromotions.length) * 100;
+  const activeEnd = plannedEnd + (active / allPromotions.length) * 100;
+  const finishedEnd = activeEnd + (finished / allPromotions.length) * 100;
 
   return (
     <div className="product-page mx-auto max-w-6xl space-y-10">
@@ -95,8 +101,8 @@ export default function Dashboard() {
             <p className="dashboard-kpi__meta mt-1 flex items-center gap-1"><TrendingUp className="text-green-700" size={14}/><span className="font-semibold text-green-700">+0,4×</span> vs période précédente</p>
           </div>
           <div className="dashboard-kpi flex items-center justify-between gap-5">
-            <div><p className="dashboard-kpi__label">Promotions</p><p className="dashboard-kpi__value mt-2">{promotions.length}</p><p className="dashboard-kpi__meta mt-1">{planned} planifiées · {active} en cours<br/>{finished} terminées · {otherStatuses} autres</p></div>
-            <div aria-label={`${promotions.length} promotions réparties par statut`} className="kpi-donut shrink-0" role="img" style={{ background: `conic-gradient(#35c894 0 ${plannedEnd}%, #4b78a8 ${plannedEnd}% ${activeEnd}%, #17364b ${activeEnd}% ${finishedEnd}%, #d8e3e8 ${finishedEnd}% 100%)` }} />
+            <div><p className="dashboard-kpi__label">Promotions</p><p className="dashboard-kpi__value mt-2">{allPromotions.length}</p><p className="dashboard-kpi__meta mt-1">{planned} planifiées · {active} en cours<br/>{finished} terminées · {otherStatuses} autres</p></div>
+            <div aria-label={`${allPromotions.length} promotions réparties par statut`} className="kpi-donut shrink-0" role="img" style={{ background: `conic-gradient(#35c894 0 ${plannedEnd}%, #4b78a8 ${plannedEnd}% ${activeEnd}%, #17364b ${activeEnd}% ${finishedEnd}%, #d8e3e8 ${finishedEnd}% 100%)` }} />
           </div>
         </div>
         {showKpiSettings && <div className="mt-5 rounded-xl border border-navy-100 bg-white p-4 text-sm text-navy-600">KPI disponibles : {availableKpis.join(' · ')}. La sélection est mockée pour le prototype.</div>}

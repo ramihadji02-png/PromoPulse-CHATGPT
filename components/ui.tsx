@@ -159,9 +159,11 @@ export function Tabs({
   onSelect?: (item: string) => void;
 }) {
   return (
-    <div className="pulse-tabs flex flex-wrap gap-2">
+    <div className="pulse-tabs flex flex-wrap gap-2" role="tablist">
       {items.map((item) => (
         <button
+          aria-selected={item === active}
+          role="tab"
           key={item}
           onClick={() => onSelect?.(item)}
           className={cn(
