@@ -1,38 +1,14 @@
-export type PromotionInputs = {
-  usualPrice: number;
-  promoPrice: number;
-  costPrice: number;
-  volume: number;
-  expenses: number;
-};
+import { calculatePromotionEconomics } from './economics';
+import { defaultMechanicConfiguration } from './mechanics';
 
-export type PromotionMetrics = {
-  discountRate: number;
-  revenue: number;
-  grossMargin: number;
-  marginAfterExpenses: number;
-  marginRate: number;
-  roi: number;
-};
+export type PromotionInputs = { usualPrice:number; promoPrice:number; costPrice:number; volume:number; expenses:number };
+export type PromotionMetrics = { discountRate:number; revenue:number; grossMargin:number; marginAfterExpenses:number; marginRate:number; roi:number };
 
-/**
- * Prototype economic definitions — to be validated with Promo Pulse domain experts.
- * Revenue = promo price × forecast volume.
- * Gross margin = (promo price − unit cost/PRI) × forecast volume.
- * Margin after expenses = gross margin − operation-specific expenses.
- * Margin rate = margin after expenses / revenue.
- * Promotional ROI = margin after expenses / operation-specific expenses.
- * When revenue or expenses are zero, their dependent ratio is reported as zero.
- */
+/** Backward-compatible adapter for existing prototype screens. New wizard work
+ * should use calculatePromotionEconomics directly. */
 export function calculatePromotion(inputs: PromotionInputs): PromotionMetrics {
-  const revenue = inputs.promoPrice * inputs.volume;
-  const grossMargin = (inputs.promoPrice - inputs.costPrice) * inputs.volume;
-  const marginAfterExpenses = grossMargin - inputs.expenses;
-  const discountRate = inputs.usualPrice > 0 ? ((inputs.usualPrice - inputs.promoPrice) / inputs.usualPrice) * 100 : 0;
-  const marginRate = revenue > 0 ? (marginAfterExpenses / revenue) * 100 : 0;
-  const roi = inputs.expenses > 0 ? marginAfterExpenses / inputs.expenses : 0;
-
-  return { discountRate, revenue, grossMargin, marginAfterExpenses, marginRate, roi };
+  const result = calculatePromotionEconomics({ mechanic:{id:'',configuration:defaultMechanicConfiguration}, regularPrice:inputs.usualPrice, promotionalPrice:inputs.promoPrice, unitCost:inputs.costPrice, forecastVolume:inputs.volume, expenses:inputs.expenses, marginTarget:0 });
+  return { discountRate:result.effectiveDiscount, revenue:result.promotionalRevenue, grossMargin:result.grossMarginBeforeExpenses, marginAfterExpenses:result.grossMargin, marginRate:result.marginRate, roi:result.promotionalROI };
 }
 
 export function buildScenarios(inputs: PromotionInputs, minimumMarginRate: number) {
@@ -43,10 +19,7 @@ export function buildScenarios(inputs: PromotionInputs, minimumMarginRate: numbe
   const recommended = calculatePromotion({ ...inputs, promoPrice: recommendedPrice });
   const conservativePrice = Math.min(inputs.usualPrice, Math.max(recommendedPrice, inputs.usualPrice * 0.9));
   const conservative = calculatePromotion({ ...inputs, promoPrice: conservativePrice });
-
-  return [
-    { name: 'Actuel', price: inputs.promoPrice, metrics: current, recommended: false },
-    { name: 'Recommandé', price: recommendedPrice, metrics: recommended, recommended: current.marginRate < minimumMarginRate },
-    { name: 'Alternative', price: conservativePrice, metrics: conservative, recommended: false },
-  ];
+  return [{name:'Actuel',price:inputs.promoPrice,metrics:current,recommended:false},{name:'Recommandé',price:recommendedPrice,metrics:recommended,recommended:current.marginRate<minimumMarginRate},{name:'Alternative',price:conservativePrice,metrics:conservative,recommended:false}];
 }
+
+export { calculatePromotionEconomics, type PromotionEconomicsInput } from './economics';

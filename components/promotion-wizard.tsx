@@ -9,7 +9,9 @@ import { channels, company, getChannel, getLine, productLines, products, promoti
 import { runPrototypeCompliance } from '@/lib/compliance-engine';
 import { buildScenarios, calculatePromotion } from '@/lib/promotion-engine';
 import { MechanicSelector } from '@/components/mechanic-selector';
+import { EconomicsStep, type CustomExpense, type ReferenceEconomics } from '@/components/economics-step';
 import { calculateEquivalentBenefit, defaultMechanicConfiguration, getMechanic, type MechanicConfiguration, type MechanicId } from '@/lib/promotion-engine/mechanics';
+import { calculatePromotionEconomics, type PromotionEconomicsProduct } from '@/lib/promotion-engine/economics';
 import { cn, euro, shortDate } from '@/lib/utils';
 import type { Product, Promotion, PromotionExpense } from '@/types/promo';
 
@@ -19,7 +21,7 @@ const savedKey = 'promo-pulse-promotions';
 const localProductsKey = 'promo-pulse-products';
 
 const expensesByContext = {
-  GMS: ['Catalogue / prospectus', 'PLV / ILV', 'Animation', 'Mise en avant', 'Trade marketing', 'Marketing', 'Autre'],
+  GMS: ['Catalogue / prospectus', 'Marketing', 'Trade marketing', 'PLV / ILV', 'Animation', 'Mise en avant', 'Frais spécifiques opération', 'Autre'],
   ecommerce: ['Amazon Ads', 'Google Ads', 'Meta Ads', 'Influence', 'Affiliation', 'Création de contenu', 'Autre'],
 };
 
@@ -34,21 +36,28 @@ type Draft = {
   mechanicConfiguration: MechanicConfiguration;
   mechanicValue: number;
   promoCode: string;
+  promotionalUnitCost: number;
+  baseQuantity: number;
+  quantityUnit: 'g' | 'kg' | 'ml' | 'L';
   volumeMode: 'global' | 'reference';
   globalVolume: number;
   referenceVolumes: Record<string, number>;
+  economicsMode: 'global' | 'reference';
+  referenceEconomics: ReferenceEconomics;
   usualPrice: number;
   promoPrice: number;
   costPrice: number;
   expenses: number;
+  expenseMode: 'global' | 'detailed';
   expenseDetails: Record<string, number>;
+  customExpenses: CustomExpense[];
   minimumMarginRate: number;
   name: string;
 };
 
 const initialDraft: Draft = {
   selectedProducts: [], selectedLineIds: [], channelIds: [], startDate: '2026-09-12', endDate: '2026-09-19', mechanic: '', mechanicId: '', mechanicConfiguration: defaultMechanicConfiguration, mechanicValue: 20, promoCode: '',
-  volumeMode: 'global', globalVolume: 10000, referenceVolumes: {}, usualPrice: 10, promoPrice: 8, costPrice: 5, expenses: 2000, expenseDetails: {}, minimumMarginRate: 15, name: 'Temps fort septembre',
+  promotionalUnitCost: 0, baseQuantity: 200, quantityUnit: 'g', volumeMode: 'global', globalVolume: 10000, referenceVolumes: {}, economicsMode: 'global', referenceEconomics: {}, usualPrice: 10, promoPrice: 8, costPrice: 5, expenses: 2000, expenseMode: 'global', expenseDetails: {}, customExpenses: [], minimumMarginRate: 15, name: 'Temps fort septembre',
 };
 
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
@@ -71,7 +80,6 @@ export function PromotionWizard() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [quickProductName, setQuickProductName] = useState('');
   const [localProducts, setLocalProducts] = useState<Product[]>([]);
-  const [showExpenses, setShowExpenses] = useState(false);
   const [showScenarios, setShowScenarios] = useState(false);
   const [isComparing, setIsComparing] = useState(false);
 
@@ -95,24 +103,35 @@ export function PromotionWizard() {
   const selectedProducts = catalog.filter((product) => effectiveProductIds.includes(product.id));
   const selectedLineId = selectedProducts[0]?.lineId ?? draft.selectedLineIds[0] ?? 'l1';
   const totalVolume = draft.volumeMode === 'global' ? draft.globalVolume : effectiveProductIds.reduce((sum, id) => sum + (draft.referenceVolumes[id] || 0), 0);
-  const detailedExpenses = Object.values(draft.expenseDetails).reduce((sum, amount) => sum + Number(amount || 0), 0);
-  const expenses = showExpenses ? detailedExpenses : draft.expenses;
+  const detailedExpenses = Object.values(draft.expenseDetails).reduce((sum, amount) => sum + Number(amount || 0), 0) + draft.customExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const expenses = draft.expenseMode === 'detailed' ? detailedExpenses : draft.expenses;
+  const selectedChannels = draft.channelIds.map(getChannel).filter(Boolean);
   const equivalentBenefit = calculateEquivalentBenefit(draft.mechanicId, draft.mechanicConfiguration);
-  const derivedPromoPrice = draft.mechanicId === 'immediate-discount' ? draft.usualPrice * (1 - equivalentBenefit / 100) : draft.promoPrice;
-  const promoPrice = draft.mechanicId === 'immediate-discount' ? derivedPromoPrice : draft.promoPrice;
-  const metrics = calculatePromotion({ usualPrice: draft.usualPrice, promoPrice, costPrice: draft.costPrice, volume: totalVolume, expenses });
-  const scenarios = buildScenarios({ usualPrice: draft.usualPrice, promoPrice, costPrice: draft.costPrice, volume: totalVolume, expenses }, draft.minimumMarginRate);
+  const promoPrice = draft.mechanicId === 'immediate-discount' ? draft.usualPrice * (1 - equivalentBenefit / 100) : draft.promoPrice;
+  const economicsProducts: PromotionEconomicsProduct[] | undefined = draft.economicsMode === 'reference' ? selectedProducts.map((product) => { const stored=draft.referenceEconomics[product.id]; const detail = stored ? {...stored,forecastVolume:draft.referenceVolumes[product.id]??stored.forecastVolume} : { regularPrice:product.usualPrice, unitCost:product.pri, forecastVolume:draft.referenceVolumes[product.id]||0 }; return { id:product.id, ...detail }; }) : undefined;
+  const economics = calculatePromotionEconomics({ mechanic:{id:draft.mechanicId,configuration:draft.mechanicConfiguration}, regularPrice:draft.usualPrice, promotionalPrice:promoPrice, unitCost:draft.costPrice, promotionalUnitCost:draft.promotionalUnitCost>0?draft.promotionalUnitCost:undefined, forecastVolume:totalVolume, expenses, marginTarget:draft.minimumMarginRate, products:economicsProducts, channel:selectedChannels[0]?.type });
+  const effectivePromoPrice = economics.averageSellingPrice;
+  const metrics = { discountRate:economics.effectiveDiscount, revenue:economics.promotionalRevenue, grossMargin:economics.grossMarginBeforeExpenses, marginAfterExpenses:economics.grossMargin, marginRate:economics.marginRate, roi:economics.promotionalROI };
+  const scenarios = buildScenarios({ usualPrice: draft.usualPrice, promoPrice:effectivePromoPrice, costPrice: draft.costPrice, volume: totalVolume, expenses }, draft.minimumMarginRate);
   const compliance = runPrototypeCompliance(totalVolume);
   const overlaps = promotions.filter((promotion) => promotion.productLineId === selectedLineId && promotion.startDate <= draft.endDate && promotion.endDate >= draft.startDate).slice(0, 2);
   const duration = draft.startDate && draft.endDate ? Math.max(0, Math.floor((new Date(draft.endDate).getTime() - new Date(draft.startDate).getTime()) / 86400000) + 1) : 0;
   const filteredProducts = catalog.filter((product) => `${product.name} ${product.ean.code} ${getLine(product.lineId).name}`.toLowerCase().includes(search.toLowerCase()));
   const update = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((current) => ({ ...current, [key]: value }));
-  const selectedChannels = draft.channelIds.map(getChannel).filter(Boolean);
   const isGms = selectedChannels.some((channel) => channel.type === 'GMS');
-  const canContinue = [totalVolume > 0 || !isGms, draft.channelIds.length > 0, Boolean(draft.startDate && draft.endDate && duration > 0), Boolean(draft.mechanicId), metrics.revenue >= 0, true, true][step];
+  const canContinue = [totalVolume > 0 || !isGms, draft.channelIds.length > 0, Boolean(draft.startDate && draft.endDate && duration > 0), Boolean(draft.mechanicId), draft.usualPrice > 0 && draft.costPrice > 0 && totalVolume > 0 && economics.averageSellingPrice > 0, true, true][step];
 
-  function toggleProduct(id: string) { update('selectedProducts', draft.selectedProducts.includes(id) ? draft.selectedProducts.filter((item) => item !== id) : [...draft.selectedProducts, id]); }
-  function toggleLine(id: string) { update('selectedLineIds', draft.selectedLineIds.includes(id) ? draft.selectedLineIds.filter((item) => item !== id) : [...draft.selectedLineIds, id]); }
+  function toggleProduct(id: string) {
+    if (draft.selectedProducts.includes(id)) { update('selectedProducts', draft.selectedProducts.filter((item) => item !== id)); return; }
+    const product=catalog.find((item)=>item.id===id);
+    setDraft((current)=>({...current,selectedProducts:[...current.selectedProducts,id],...(current.selectedProducts.length||current.selectedLineIds.length||!product?{}:{usualPrice:product.usualPrice,costPrice:product.pri,promoPrice:product.usualPrice})}));
+  }
+  function toggleLine(id: string) {
+    if (draft.selectedLineIds.includes(id)) { update('selectedLineIds',draft.selectedLineIds.filter((item)=>item!==id)); return; }
+    const lineProducts=catalog.filter((product)=>product.lineId===id);
+    const average=(key:'usualPrice'|'pri')=>lineProducts.length?lineProducts.reduce((sum,product)=>sum+product[key],0)/lineProducts.length:0;
+    setDraft((current)=>({...current,selectedLineIds:[...current.selectedLineIds,id],...(current.selectedProducts.length||current.selectedLineIds.length||!lineProducts.length?{}:{usualPrice:average('usualPrice'),costPrice:average('pri'),promoPrice:average('usualPrice')})}));
+  }
   function toggleChannel(id: string) {
     const channelIds = draft.channelIds.includes(id) ? draft.channelIds.filter((item) => item !== id) : [...draft.channelIds, id];
     setDraft((current) => ({ ...current, channelIds }));
@@ -132,14 +151,14 @@ export function PromotionWizard() {
   function save(status: 'Brouillon' | 'Planifiée') {
     const saved = JSON.parse(window.localStorage.getItem(savedKey) || '[]') as Promotion[];
     const id = `local-${Date.now()}`;
-    const detailExpenses: PromotionExpense[] = showExpenses
-      ? Object.entries(draft.expenseDetails).filter(([, amount]) => amount > 0).map(([label, amount]) => ({ label, amount, type: isGms ? 'GMS' : 'E-commerce' }))
+    const detailExpenses: PromotionExpense[] = draft.expenseMode === 'detailed'
+      ? [...Object.entries(draft.expenseDetails).filter(([, amount]) => amount > 0).map(([label, amount]) => ({ label, amount, type: isGms ? 'GMS' as const : 'E-commerce' as const })), ...draft.customExpenses.filter((expense)=>expense.amount>0).map((expense)=>({label:expense.label,amount:expense.amount,type:'Autre' as const}))]
       : [{ label: 'Dépenses liées à l’opération', amount: expenses, type: isGms ? 'GMS' : 'E-commerce' }];
     const controlStatus = compliance.some((check) => check.status === 'Problème') ? 'Problème' : compliance.some((check) => check.status === 'Vigilance') ? 'Vigilance' : 'Non vérifié';
     const promotion: Promotion = {
       id, name: draft.name || `${getLine(selectedLineId).name} — Promotion`, productLineId: selectedLineId,
       products: effectiveProductIds.map((productId) => ({ productId, forecastVolume: draft.volumeMode === 'global' ? Math.round(totalVolume / Math.max(1, effectiveProductIds.length)) : draft.referenceVolumes[productId] || 0 })),
-      channelIds: draft.channelIds, startDate: draft.startDate, endDate: draft.endDate, mechanic: draft.mechanic, mechanicId: draft.mechanicId, mechanicConfiguration: draft.mechanicConfiguration, discountRate: metrics.discountRate, usualPrice: draft.usualPrice, promoPrice, costPrice: draft.costPrice, minimumMarginRate: draft.minimumMarginRate,
+      channelIds: draft.channelIds, startDate: draft.startDate, endDate: draft.endDate, mechanic: draft.mechanic, mechanicId: draft.mechanicId, mechanicConfiguration: draft.mechanicConfiguration, discountRate: metrics.discountRate, usualPrice: draft.usualPrice, promoPrice:effectivePromoPrice, costPrice: draft.costPrice, minimumMarginRate: draft.minimumMarginRate,
       forecastRevenue: metrics.revenue, forecastMargin: metrics.marginAfterExpenses, marginRate: metrics.marginRate, roi: metrics.roi, expenses: detailExpenses, operationalStatus: status, controlStatus, owner: 'Camille', checks: compliance,
       scenarios: scenarios.map((scenario) => ({ name: scenario.name, discountRate: scenario.metrics.discountRate, marginRate: scenario.metrics.marginRate, roi: scenario.metrics.roi, recommendation: scenario.recommended ? 'Scénario déterministe recommandé pour se rapprocher de l’objectif saisi.' : '' })),
     };
@@ -155,11 +174,11 @@ export function PromotionWizard() {
       {step === 1 && <ChannelStep context={channelContext} draft={draft} setContext={(context) => { setChannelContext(context); update('channelIds', draft.channelIds.filter((id) => context === 'GMS' ? getChannel(id).type === 'GMS' : getChannel(id).type !== 'GMS')); }} toggleChannel={toggleChannel} />}
       {step === 2 && <PeriodStep draft={draft} duration={duration} overlaps={overlaps} update={update} />}
       {step === 3 && <MechanicSelector category={getLine(selectedLineId).category} channel={selectedChannels[0]?.type} selectedId={draft.mechanicId} configuration={draft.mechanicConfiguration} onChange={(mechanicId, mechanicConfiguration) => { const mechanic = getMechanic(mechanicId); const benefit = calculateEquivalentBenefit(mechanicId, mechanicConfiguration); setDraft((current) => ({ ...current, mechanicId, mechanicConfiguration, mechanicValue: mechanicConfiguration.value, mechanic: mechanic ? `${mechanic.name}${benefit > 0 ? ` — ${new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2}).format(benefit)} % équivalent` : ''}` : '' })); }} />}
-      {step === 4 && <EconomyStep draft={draft} expenses={expenses} detailedExpenses={detailedExpenses} expenseLabels={isGms ? expensesByContext.GMS : expensesByContext.ecommerce} metrics={metrics} promoPrice={promoPrice} showExpenses={showExpenses} totalVolume={totalVolume} setShowExpenses={setShowExpenses} update={update} />}
+      {step === 4 && <EconomicsStep draft={draft} products={selectedProducts} expenseLabels={isGms ? expensesByContext.GMS : expensesByContext.ecommerce} totalVolume={totalVolume} totalExpenses={expenses} result={economics} onPatch={(patch)=>setDraft((current)=>({...current,...patch}))} onEditMechanic={()=>setStep(3)} />}
       {step === 5 && <AnalysisStep compliance={compliance} draft={draft} expenses={expenses} isComparing={isComparing} metrics={metrics} overlaps={overlaps} scenarios={scenarios} showScenarios={showScenarios} totalVolume={totalVolume} applyScenario={applyScenario} compareScenarios={compareScenarios} />}
-      {step === 6 && <ValidationStep compliance={compliance} draft={draft} expenses={expenses} metrics={metrics} promoPrice={promoPrice} selectedProducts={selectedProducts} totalVolume={totalVolume} update={update} save={save} />}
+      {step === 6 && <ValidationStep compliance={compliance} draft={draft} expenses={expenses} metrics={metrics} promoPrice={effectivePromoPrice} selectedProducts={selectedProducts} totalVolume={totalVolume} update={update} save={save} />}
     </Card>
-    <footer className="flex items-center justify-between"><Button disabled={step === 0} variant="ghost" onClick={() => setStep((current) => Math.max(0, current - 1))}><ChevronLeft className="mr-2" size={16} />Précédent</Button>{step < steps.length - 1 && <Button disabled={!canContinue} onClick={() => setStep((current) => Math.min(steps.length - 1, current + 1))}>Continuer<ChevronRight className="ml-2" size={16} /></Button>}</footer>
+    <footer className="flex items-center justify-between"><Button disabled={step === 0} variant="ghost" onClick={() => setStep((current) => Math.max(0, current - 1))}><ChevronLeft className="mr-2" size={16} />{step === 4 ? 'Retour' : 'Précédent'}</Button>{step < steps.length - 1 && <Button disabled={!canContinue} onClick={() => setStep((current) => Math.min(steps.length - 1, current + 1))}>{step === 4 ? 'Analyser la promotion' : 'Continuer'}<ChevronRight className="ml-2" size={16} /></Button>}</footer>
 
     {showProductModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/30 p-4" onClick={() => setShowProductModal(false)} role="presentation"><div aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()} role="dialog"><div className="flex items-center justify-between"><h2 className="text-xl font-bold">Créer un produit rapidement</h2><button aria-label="Fermer" className="rounded-lg p-2 hover:bg-navy-50" onClick={() => setShowProductModal(false)} type="button"><X size={18} /></button></div><p className="mt-2 text-sm text-navy-500">Vous pourrez compléter son EAN, ses prix et son conditionnement dans le catalogue plus tard.</p><Field label="Nom du produit"><input autoFocus className={`${inputClass} mt-5`} value={quickProductName} onChange={(event) => setQuickProductName(event.target.value)} /></Field><Button className="mt-5 w-full" disabled={!quickProductName.trim()} onClick={createProduct}>Créer et sélectionner</Button></div></div>}
   </div>;
@@ -176,10 +195,6 @@ function ChannelStep({ context, draft, setContext, toggleChannel }: { context: '
 
 function PeriodStep({ draft, duration, overlaps, update }: { draft: Draft; duration: number; overlaps: Promotion[]; update: <K extends keyof Draft>(key: K, value: Draft[K]) => void }) {
   return <section><StepTitle title="Quand aura lieu la promotion ?" /><div className="mt-6 grid gap-4 sm:grid-cols-2"><Field label="Date de début"><input className={inputClass} type="date" value={draft.startDate} onChange={(event) => update('startDate', event.target.value)} /></Field><Field label="Date de fin"><input className={inputClass} min={draft.startDate} type="date" value={draft.endDate} onChange={(event) => update('endDate', event.target.value)} /></Field></div><p className="mt-4 font-semibold tabular-nums">Durée : {duration} jour{duration > 1 ? 's' : ''}</p>{overlaps.length > 0 && <Notice tone="warning"><strong>À vérifier — chevauchement détecté</strong><p className="mt-1">Une autre promotion concernant cette gamme est prévue sur une partie de cette période. Ce n’est pas un problème réglementaire.</p>{overlaps.map((promotion) => <Link className="mt-2 block font-semibold underline" href={`/promotions/${promotion.id}`} key={promotion.id}>{promotion.name} · {shortDate(promotion.startDate)} → {shortDate(promotion.endDate)}</Link>)}</Notice>}</section>;
-}
-
-function EconomyStep({ draft, expenses, detailedExpenses, expenseLabels, metrics, promoPrice, showExpenses, totalVolume, setShowExpenses, update }: { draft: Draft; expenses: number; detailedExpenses: number; expenseLabels: string[]; metrics: ReturnType<typeof calculatePromotion>; promoPrice: number; showExpenses: boolean; totalVolume: number; setShowExpenses: (show: boolean) => void; update: <K extends keyof Draft>(key: K, value: Draft[K]) => void }) {
-  return <section><StepTitle title="Économie de la promotion" text="Les résultats se recalculent immédiatement." /><div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><NumericField label="Prix habituel" unit="€" step={0.01} value={draft.usualPrice} onChange={(value) => update('usualPrice', value)} /><NumericField disabled={draft.mechanicId === 'immediate-discount'} label="Prix promotionnel" unit="€" step={0.01} value={promoPrice} onChange={(value) => update('promoPrice', value)} /><NumericField label="PRI / coût de revient" unit="€" step={0.01} value={draft.costPrice} hint="Coût de revient utilisé pour calculer la marge de l’opération." onChange={(value) => update('costPrice', value)} /><NumericField label="Volume prévisionnel" unit="unités" value={totalVolume} onChange={(value) => { update('volumeMode', 'global'); update('globalVolume', value); }} /><NumericField disabled={showExpenses} label="Dépenses liées à l’opération" unit="€" value={expenses} onChange={(value) => update('expenses', value)} /><NumericField label="Objectif minimum de marge" unit="%" step={0.1} value={draft.minimumMarginRate} onChange={(value) => update('minimumMarginRate', value)} /></div><div className="mt-4 flex items-center justify-between gap-3"><p className="font-bold tabular-nums text-navy-900">Remise calculée : <span className="text-mint-700">-{metrics.discountRate.toFixed(1)} %</span></p><Button variant="ghost" onClick={() => setShowExpenses(!showExpenses)}>{showExpenses ? 'Masquer le détail' : '+ Détailler'}</Button></div>{showExpenses && <div className="accordion-grid is-open mt-3"><div><div className="grid gap-3 rounded-xl bg-navy-50 p-4 sm:grid-cols-2">{expenseLabels.map((label) => <NumericField key={label} label={label} unit="€" value={draft.expenseDetails[label] || 0} onChange={(value) => update('expenseDetails', { ...draft.expenseDetails, [label]: value })} />)}<p className="font-bold tabular-nums sm:col-span-2">Total détaillé : {euro(detailedExpenses)}</p></div></div></div>}<div className="economy-preview mt-7 border-y border-navy-100 py-5"><p className="text-xs font-bold uppercase tracking-wider text-navy-400">Aperçu en temps réel</p><div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5 lg:grid-cols-4"><Metric label="CA prévisionnel" value={euro(metrics.revenue)} /><Metric label="Marge" value={`${metrics.marginRate.toFixed(1)} %`} /><Metric label="ROI" value={`${metrics.roi.toFixed(1)}×`} /><Metric label="Volume" value={totalVolume.toLocaleString('fr-FR')} /></div></div></section>;
 }
 
 function AnalysisStep({ compliance, draft, expenses, isComparing, metrics, overlaps, scenarios, showScenarios, totalVolume, applyScenario, compareScenarios }: { compliance: ReturnType<typeof runPrototypeCompliance>; draft: Draft; expenses: number; isComparing: boolean; metrics: ReturnType<typeof calculatePromotion>; overlaps: Promotion[]; scenarios: ReturnType<typeof buildScenarios>; showScenarios: boolean; totalVolume: number; applyScenario: (price: number) => void; compareScenarios: () => void }) {

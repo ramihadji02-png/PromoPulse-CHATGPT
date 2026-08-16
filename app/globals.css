@@ -128,6 +128,11 @@ tr:hover .row-affordance, tr:focus-within .row-affordance { opacity: 1; transfor
 .mechanic-popover { animation: mechanic-popover-in 150ms ease both; }
 @keyframes mechanic-popover-in { from { opacity: 0; transform: translateY(-3px); } }
 
+/* Economy step: hypotheses alongside a stable live projection */
+.economics-projection { border-top: 3px solid var(--pulse-navy); padding: 24px; background: #f1f6f4; border-radius: 14px; }
+.projection-value { transition: color 160ms ease, transform 160ms ease; }
+.economics-projection:hover .projection-value { color: #17364b; }
+
 @media (max-width: 767px) {
   .mechanic-popover { position: relative; top: auto; right: auto; width: 100%; margin-top: 14px; box-shadow: 0 8px 22px rgba(13,37,56,.09); }
 }
