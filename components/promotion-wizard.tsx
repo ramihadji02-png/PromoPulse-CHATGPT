@@ -13,7 +13,8 @@ import { EconomicsStep, type CustomExpense, type ReferenceEconomics } from '@/co
 import { calculateEquivalentBenefit, defaultMechanicConfiguration, getMechanic, type MechanicConfiguration, type MechanicId } from '@/lib/promotion-engine/mechanics';
 import { calculatePromotionEconomics, type PromotionEconomicsProduct } from '@/lib/promotion-engine/economics';
 import { cn, euro, shortDate } from '@/lib/utils';
-import type { Product, Promotion, PromotionExpense } from '@/types/promo';
+import { CHANNEL_SETTINGS_KEY, normalizeProduct } from '@/lib/catalog';
+import type { ChannelSettings, Product, Promotion, PromotionExpense } from '@/types/promo';
 
 const steps = ['Produits', 'Canal', 'Période', 'Mécanique', 'Économie', 'Analyse', 'Validation'];
 const draftKey = 'promo-pulse-draft';
@@ -81,6 +82,7 @@ export function PromotionWizard() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [quickProductName, setQuickProductName] = useState('');
   const [localProducts, setLocalProducts] = useState<Product[]>([]);
+  const [channelSettings, setChannelSettings] = useState<ChannelSettings[]>([]);
   const [showScenarios, setShowScenarios] = useState(false);
   const [isComparing, setIsComparing] = useState(false);
 
@@ -88,7 +90,8 @@ export function PromotionWizard() {
     const stored = window.localStorage.getItem(draftKey);
     const timer = window.setTimeout(() => {
       if (stored) { const parsed = JSON.parse(stored); setDraft({ ...initialDraft, ...parsed, mechanicConfiguration: { ...defaultMechanicConfiguration, ...parsed.mechanicConfiguration } }); }
-      setLocalProducts(JSON.parse(window.localStorage.getItem(localProductsKey) || '[]'));
+      setLocalProducts((JSON.parse(window.localStorage.getItem(localProductsKey) || '[]') as Product[]).map(normalizeProduct));
+      setChannelSettings(JSON.parse(window.localStorage.getItem(CHANNEL_SETTINGS_KEY) || '[]'));
       setReady(true);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -99,7 +102,7 @@ export function PromotionWizard() {
     return () => window.clearTimeout(timer);
   }, [draft, ready]);
 
-  const catalog = useMemo(() => [...products, ...localProducts], [localProducts]);
+  const catalog = useMemo(() => Array.from(new Map([...products.map(normalizeProduct), ...localProducts].map((product)=>[product.id,product])).values()).filter(product=>(product.status??'Actif')==='Actif'), [localProducts]);
   const effectiveProductIds = useMemo(() => Array.from(new Set([...draft.selectedProducts, ...catalog.filter((product) => draft.selectedLineIds.includes(product.lineId)).map((product) => product.id)])), [catalog, draft.selectedLineIds, draft.selectedProducts]);
   const selectedProducts = catalog.filter((product) => effectiveProductIds.includes(product.id));
   const selectedLineId = selectedProducts[0]?.lineId ?? draft.selectedLineIds[0] ?? 'l1';
@@ -135,12 +138,13 @@ export function PromotionWizard() {
   }
   function toggleChannel(id: string) {
     const channelIds = draft.channelIds.includes(id) ? draft.channelIds.filter((item) => item !== id) : [...draft.channelIds, id];
-    setDraft((current) => ({ ...current, channelIds }));
+    const target=channelSettings.find(setting=>setting.channelId===id)?.defaultMarginTarget;
+    setDraft((current) => ({ ...current, channelIds, ...(!current.channelIds.includes(id)&&target!=null?{minimumMarginRate:target}:{}) }));
   }
   function createProduct() {
     if (!quickProductName.trim()) return;
     const suffix = Date.now();
-    const product: Product = { id: `local-product-${suffix}`, lineId: draft.selectedLineIds[0] ?? 'l1', name: quickProductName.trim(), ean: { code: `LOCAL${String(suffix).slice(-7)}`, packaging: 'Unité' }, pri: 0, usualPrice: 0, recommendedPrice: 0, minMarginRate: 0 };
+    const product: Product = { id: `local-product-${suffix}`, lineId: draft.selectedLineIds[0] ?? 'l1', name: quickProductName.trim(), ean: { code: '', packaging: 'À compléter' }, pri: 0, usualPrice: 0, recommendedPrice: 0, minMarginRate: 0, status:'Actif', references:[{id:`local-ref-${suffix}`,label:quickProductName.trim(),status:'Actif'}] };
     const next = [...localProducts, product];
     setLocalProducts(next); window.localStorage.setItem(localProductsKey, JSON.stringify(next)); update('selectedProducts', [...draft.selectedProducts, product.id]); setQuickProductName(''); setShowProductModal(false);
   }
@@ -174,7 +178,7 @@ export function PromotionWizard() {
 
     <Card className="wizard-panel min-h-[460px] p-6 md:p-8">
       {step === 0 && <ProductsStep draft={draft} filteredProducts={filteredProducts} selectedProducts={selectedProducts} totalVolume={totalVolume} search={search} setSearch={setSearch} toggleProduct={toggleProduct} toggleLine={toggleLine} update={update} onCreate={() => setShowProductModal(true)} />}
-      {step === 1 && <ChannelStep context={channelContext} draft={draft} setContext={(context) => { setChannelContext(context); update('channelIds', draft.channelIds.filter((id) => context === 'GMS' ? getChannel(id).type === 'GMS' : getChannel(id).type !== 'GMS')); }} toggleChannel={toggleChannel} />}
+      {step === 1 && <ChannelStep settings={channelSettings} context={channelContext} draft={draft} setContext={(context) => { setChannelContext(context); update('channelIds', draft.channelIds.filter((id) => context === 'GMS' ? getChannel(id).type === 'GMS' : getChannel(id).type !== 'GMS')); }} toggleChannel={toggleChannel} />}
       {step === 2 && <PeriodStep draft={draft} duration={duration} overlaps={overlaps} update={update} />}
       {step === 3 && <MechanicSelector category={getLine(selectedLineId).category} channel={selectedChannels[0]?.type} selectedId={draft.mechanicId} configuration={draft.mechanicConfiguration} onChange={(mechanicId, mechanicConfiguration) => { const mechanic = getMechanic(mechanicId); const benefit = calculateEquivalentBenefit(mechanicId, mechanicConfiguration); setDraft((current) => ({ ...current, mechanicId, mechanicConfiguration, mechanicValue: mechanicConfiguration.value, mechanic: mechanic ? `${mechanic.name}${benefit > 0 ? ` — ${new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2}).format(benefit)} % équivalent` : ''}` : '' })); }} />}
       {step === 4 && <EconomicsStep draft={draft} products={selectedProducts} expenseLabels={isGms ? expensesByContext.GMS : expensesByContext.ecommerce} totalVolume={totalVolume} totalExpenses={expenses} result={economics} onPatch={(patch)=>setDraft((current)=>({...current,...patch}))} onEditMechanic={()=>setStep(3)} />}
@@ -191,8 +195,8 @@ function ProductsStep({ draft, filteredProducts, selectedProducts, totalVolume, 
   return <section><StepTitle title="Que souhaitez-vous promouvoir ?" text="Choisissez une gamme entière ou sélectionnez précisément vos références." /><div className="mt-6"><p className="text-xs font-bold uppercase tracking-wider text-navy-400">Gammes</p><div className="mt-3 flex flex-wrap gap-2">{productLines.map((line) => <button className={cn('rounded-xl border px-4 py-2 text-sm font-semibold transition', draft.selectedLineIds.includes(line.id) ? 'border-mint-500 bg-mint-50 text-navy-900' : 'border-navy-100 hover:border-navy-200')} key={line.id} onClick={() => toggleLine(line.id)} type="button">{line.name}</button>)}</div></div><div className="mt-6 flex flex-col gap-3 sm:flex-row"><input aria-label="Recherche produit" className={inputClass} placeholder="Rechercher un produit, une gamme ou un EAN" value={search} onChange={(event) => setSearch(event.target.value)} /><Button variant="secondary" onClick={onCreate}><Plus className="mr-2" size={16} />Créer un produit</Button></div><div className="mt-4 grid max-h-60 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">{filteredProducts.map((product) => <button aria-pressed={draft.selectedProducts.includes(product.id)} className={cn('selection-tile flex items-center gap-3 rounded-xl border p-3 text-left transition', draft.selectedProducts.includes(product.id) ? 'border-mint-500 bg-mint-50' : 'border-navy-100 hover:border-navy-200 hover:bg-navy-50')} key={product.id} onClick={() => toggleProduct(product.id)} type="button"><span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded border', draft.selectedProducts.includes(product.id) && 'border-mint-500 bg-mint-500 text-navy-900')}>{draft.selectedProducts.includes(product.id) && <Check size={13} />}</span><span className="min-w-0"><strong className="block truncate text-sm">{product.name}</strong><span className="block truncate text-xs text-navy-500">{getLine(product.lineId).name} · {product.ean.code} · {product.ean.packaging}</span></span></button>)}</div><p className="mt-3 text-sm text-navy-500">Vous pourrez également compléter votre catalogue plus tard.</p><div className="mt-7 border-t border-navy-100 pt-6"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-bold">Volume prévisionnel</h3><div className="flex gap-2"><Button variant={draft.volumeMode === 'global' ? 'primary' : 'secondary'} onClick={() => update('volumeMode', 'global')}>Global</Button><Button disabled={!selectedProducts.length} variant={draft.volumeMode === 'reference' ? 'primary' : 'secondary'} onClick={() => update('volumeMode', 'reference')}>Par référence</Button></div></div>{draft.volumeMode === 'global' ? <div className="mt-4 max-w-sm"><NumericField label="Volume prévisionnel" unit="unités" value={draft.globalVolume} onChange={(value) => update('globalVolume', value)} /></div> : <div className="mt-4 space-y-2">{selectedProducts.map((product) => <div className="grid grid-cols-[minmax(0,1fr)_180px] items-center gap-3" key={product.id}><span className="truncate text-sm">{product.name}</span><NumericField label="" unit="unités" value={draft.referenceVolumes[product.id] || 0} onChange={(value) => update('referenceVolumes', { ...draft.referenceVolumes, [product.id]: value })} /></div>)}<p className="border-t border-navy-100 pt-3 text-right font-bold tabular-nums">Total : {totalVolume.toLocaleString('fr-FR')} unités</p></div>}</div></section>;
 }
 
-function ChannelStep({ context, draft, setContext, toggleChannel }: { context: 'GMS' | 'ecommerce'; draft: Draft; setContext: (context: 'GMS' | 'ecommerce') => void; toggleChannel: (id: string) => void }) {
-  const visible = channels.filter((channel) => channel.selected && (context === 'GMS' ? channel.type === 'GMS' : channel.type !== 'GMS'));
+function ChannelStep({ context, draft, settings, setContext, toggleChannel }: { context: 'GMS' | 'ecommerce'; draft: Draft; settings:ChannelSettings[]; setContext: (context: 'GMS' | 'ecommerce') => void; toggleChannel: (id: string) => void }) {
+  const visible = channels.filter((channel) => (settings.find(item=>item.channelId===channel.id)?.selected??channel.selected) && (context === 'GMS' ? channel.type === 'GMS' : channel.type !== 'GMS'));
   return <section><StepTitle title="Où aura lieu cette promotion ?" text="Sélectionnez une ou plusieurs enseignes disponibles pour Maison Alba." />{company.profile === 'mixed' && <div className="mt-6 inline-flex rounded-xl bg-navy-50 p-1"><button className={cn('rounded-lg px-4 py-2 text-sm font-semibold', context === 'GMS' && 'bg-white shadow-sm')} onClick={() => setContext('GMS')} type="button">GMS</button><button className={cn('rounded-lg px-4 py-2 text-sm font-semibold', context === 'ecommerce' && 'bg-white shadow-sm')} onClick={() => setContext('ecommerce')} type="button">E-commerce</button></div>}<div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{visible.map((channel) => <button aria-pressed={draft.channelIds.includes(channel.id)} className={cn('selection-tile flex items-center gap-3 rounded-xl border p-4 text-left transition', draft.channelIds.includes(channel.id) ? 'border-mint-500 bg-mint-50' : 'border-navy-100 hover:border-navy-200 hover:bg-navy-50')} key={channel.id} onClick={() => toggleChannel(channel.id)} type="button"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-sm font-black shadow-sm">{channel.logo}</span><span><strong className="block">{channel.name === 'Leclerc' ? 'E.Leclerc' : channel.name}</strong><span className="text-xs text-navy-500">{channel.type}</span></span>{draft.channelIds.includes(channel.id) && <CheckCircle2 className="ml-auto text-mint-600" size={18} />}</button>)}</div>{draft.channelIds.length > 1 && <Notice tone="info">Les paramètres communs sont utilisés dans ce prototype. Ils pourront être ajustés par enseigne ensuite.</Notice>}</section>;
 }
 

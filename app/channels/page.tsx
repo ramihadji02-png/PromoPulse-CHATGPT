@@ -1,2 +1,2 @@
-import { Card } from '@/components/ui';
-export default function Page(){return <div className='space-y-6'><h1 className='text-3xl font-black'>CHANNELS</h1><Card><p>Module prévu dans les phases suivantes. Route créée pour valider la navigation du prototype.</p></Card></div>}
+import { ChannelCatalog } from '@/components/catalog/channel-catalog';
+export default function ChannelsPage(){return <ChannelCatalog/>}

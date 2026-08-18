@@ -1,1 +1,2 @@
-import { Card } from '@/components/ui'; export default function Product(){return <Card>Fiche produit prévue en phase 4.</Card>}
+import { ProductDetail } from '@/components/catalog/product-detail';
+export default async function ProductPage({params}:{params:Promise<{id:string}>}){const{id}=await params;return <ProductDetail id={id}/>}

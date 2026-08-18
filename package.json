@@ -3,11 +3,13 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint .",
-    "test:economics": "tsx --test lib/promotion-engine/economics.test.ts"
+    "test:economics": "tsx --test lib/promotion-engine/economics.test.ts",
+    "test:catalog": "tsx --test lib/catalog/import.test.ts"
   },
   "dependencies": {
     "@next/eslint-plugin-next": "latest",
     "clsx": "latest",
+    "exceljs": "^4.4.0",
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",
