@@ -4,7 +4,9 @@
     "build": "next build",
     "lint": "eslint .",
     "test:economics": "tsx --test lib/promotion-engine/economics.test.ts",
-    "test:catalog": "tsx --test lib/catalog/import.test.ts"
+    "test:catalog": "tsx --test lib/catalog/import.test.ts",
+    "test:ranges": "tsx --test lib/catalog/ranges.test.ts",
+    "test:supplier-economics": "tsx --test lib/promotion-engine/supplier-economics.test.ts"
   },
   "dependencies": {
     "@next/eslint-plugin-next": "latest",

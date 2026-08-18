@@ -9,6 +9,8 @@ export function referencesOf(product:Product):ProductReference[]{
  if(product.references?.length)return product.references;
  return [{id:`${product.id}-ref`,label:product.ean.packaging||product.name,ean:product.ean.code||undefined,packaging:product.ean.packaging,usualPrice:product.usualPrice,recommendedPrice:product.recommendedPrice,unitCost:product.pri,minimumMarginRate:product.minMarginRate,status:product.status??'Actif',channelIds:product.channelIds??[]}];
 }
+// Migration explicite : l'ancien `pri` reste le coût fournisseur et `usualPrice`
+// reste le prix consommateur habituel. Aucun prix de vente enseigne n'est inventé.
 export function normalizeProduct(product:Product):Product{return {...product,status:product.status??'Actif',references:referencesOf(product)};}
 export function validateEan(value:string){
  const digits=value.replace(/\s/g,'');if(!digits)return true;if(!/^\d{8}$|^\d{13}$/.test(digits))return false;
