@@ -6,7 +6,8 @@
     "test:economics": "tsx --test lib/promotion-engine/economics.test.ts",
     "test:catalog": "tsx --test lib/catalog/import.test.ts",
     "test:ranges": "tsx --test lib/catalog/ranges.test.ts",
-    "test:supplier-economics": "tsx --test lib/promotion-engine/supplier-economics.test.ts"
+    "test:supplier-economics": "tsx --test lib/promotion-engine/supplier-economics.test.ts",
+    "test:retailers": "tsx --test lib/retailers/repository.test.ts"
   },
   "dependencies": {
     "@next/eslint-plugin-next": "latest",

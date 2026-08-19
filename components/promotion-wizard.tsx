@@ -9,13 +9,14 @@ import { channels, company, getChannel, getLine, productLines, products, promoti
 import { runPrototypeCompliance } from '@/lib/compliance-engine';
 import { buildScenarios, calculatePromotion } from '@/lib/promotion-engine';
 import { MechanicSelector } from '@/components/mechanic-selector';
-import {ChannelLogo} from '@/components/catalog/channel-logo';
+import {RetailerSelector} from '@/components/catalog/retailer-selector';
 import { EconomicsStep, type CustomExpense, type ReferenceEconomics } from '@/components/economics-step';
 import { calculateEquivalentBenefit, defaultMechanicConfiguration, getMechanic, type MechanicConfiguration, type MechanicId } from '@/lib/promotion-engine/mechanics';
 import { calculatePromotionEconomics, type PromotionEconomicsProduct } from '@/lib/promotion-engine/economics';
 import { cn, euro, shortDate } from '@/lib/utils';
 import { CHANNEL_SETTINGS_KEY, normalizeProduct } from '@/lib/catalog';
-import type { ChannelSettings, Product, Promotion, PromotionExpense } from '@/types/promo';
+import {channelIdsForSelections,COMPANY_SCOPES_KEY,selectionsFromLegacyChannelIds} from '@/lib/retailers/repository';
+import type { ChannelSettings, Product, Promotion, PromotionExpense, RetailerScopeSelection } from '@/types/promo';
 
 const steps = ['Produits', 'Canal', 'Période', 'Mécanique', 'Économie', 'Analyse', 'Validation'];
 const draftKey = 'promo-pulse-draft';
@@ -34,6 +35,7 @@ type Draft = {
   selectedRangeId?:string;
   selectedReferenceIds:string[];
   channelIds: string[];
+  retailerScopes:RetailerScopeSelection[];
   startDate: string;
   endDate: string;
   mechanic: string;
@@ -66,7 +68,7 @@ type Draft = {
 };
 
 const initialDraft: Draft = {
-  selectedProducts: [], selectedLineIds: [], selectedReferenceIds: [], channelIds: [], startDate: '2026-09-12', endDate: '2026-09-19', mechanic: '', mechanicId: '', mechanicConfiguration: defaultMechanicConfiguration, mechanicValue: 20, promoCode: '',
+  selectedProducts: [], selectedLineIds: [], selectedReferenceIds: [], channelIds: [], retailerScopes:[], startDate: '2026-09-12', endDate: '2026-09-19', mechanic: '', mechanicId: '', mechanicConfiguration: defaultMechanicConfiguration, mechanicValue: 20, promoCode: '',
   promotionalUnitCost: 0, baseQuantity: 200, quantityUnit: 'g', volumeMode: 'global', globalVolume: 10000, referenceVolumes: {}, economicsMode: 'global', referenceEconomics: {}, usualPrice: 10, promoPrice: 8, costPrice: 5, sellInPrice:7, supplierFundingMode:'perUnit', supplierFundingValue:0, expenses: 2000, expenseMode: 'global', simpleExpenseMode:'global', expenseUnitModes:{}, expenseDetails: {}, customExpenses: [], minimumMarginRate: 15, name: 'Temps fort septembre',
 };
 
@@ -91,15 +93,17 @@ export function PromotionWizard() {
   const [quickProductName, setQuickProductName] = useState('');
   const [localProducts, setLocalProducts] = useState<Product[]>([]);
   const [channelSettings, setChannelSettings] = useState<ChannelSettings[]>([]);
+  const [companyScopeIds,setCompanyScopeIds]=useState<string[]>([]);
   const [showScenarios, setShowScenarios] = useState(false);
   const [isComparing, setIsComparing] = useState(false);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(draftKey);
     const timer = window.setTimeout(() => {
-      if (stored) { const parsed = JSON.parse(stored); setDraft({ ...initialDraft, ...parsed, mechanicConfiguration: { ...defaultMechanicConfiguration, ...parsed.mechanicConfiguration } }); }
+      if (stored) { const parsed = JSON.parse(stored); setDraft({ ...initialDraft, ...parsed, retailerScopes:parsed.retailerScopes??selectionsFromLegacyChannelIds(parsed.channelIds??[]), mechanicConfiguration: { ...defaultMechanicConfiguration, ...parsed.mechanicConfiguration } }); }
       setLocalProducts((JSON.parse(window.localStorage.getItem(localProductsKey) || '[]') as Product[]).map(normalizeProduct));
       setChannelSettings(JSON.parse(window.localStorage.getItem(CHANNEL_SETTINGS_KEY) || '[]'));
+      setCompanyScopeIds((JSON.parse(window.localStorage.getItem(COMPANY_SCOPES_KEY)||'[]') as RetailerScopeSelection[]).map(item=>item.scopeId));
       setReady(true);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -144,11 +148,7 @@ export function PromotionWizard() {
     const average=(key:'usualPrice'|'pri')=>lineProducts.length?lineProducts.reduce((sum,product)=>sum+product[key],0)/lineProducts.length:0;
     setDraft((current)=>({...current,selectedLineIds:[...current.selectedLineIds,id],...(current.selectedProducts.length||current.selectedLineIds.length||!lineProducts.length?{}:{usualPrice:average('usualPrice'),costPrice:average('pri'),promoPrice:average('usualPrice')})}));
   }
-  function toggleChannel(id: string) {
-    const channelIds = draft.channelIds.includes(id) ? draft.channelIds.filter((item) => item !== id) : [...draft.channelIds, id];
-    const target=channelSettings.find(setting=>setting.channelId===id)?.defaultMarginTarget;
-    setDraft((current) => ({ ...current, channelIds, ...(!current.channelIds.includes(id)&&target!=null?{minimumMarginRate:target}:{}) }));
-  }
+
   function createProduct() {
     if (!quickProductName.trim()) return;
     const suffix = Date.now();
@@ -170,6 +170,7 @@ export function PromotionWizard() {
     const controlStatus = compliance.some((check) => check.status === 'Problème') ? 'Problème' : compliance.some((check) => check.status === 'Vigilance') ? 'Vigilance' : 'Non vérifié';
     const promotion: Promotion = {
       id, name: draft.name || `${getLine(selectedLineId).name} — Promotion`, productLineId: selectedLineId, sourceRangeId:draft.selectedRangeId, referenceIdsSnapshot:draft.selectedReferenceIds.length?[...draft.selectedReferenceIds]:selectedProducts.flatMap(product=>(product.references??[]).map(reference=>reference.id)),
+      retailerScopeSnapshot:draft.retailerScopes.map(selection=>({...selection,childScopeIds:[...selection.childScopeIds]})),
       products: effectiveProductIds.map((productId) => ({ productId, forecastVolume: draft.volumeMode === 'global' ? Math.round(economics.forecastVolume / Math.max(1, effectiveProductIds.length)) : draft.referenceVolumes[productId] || 0 })),
       channelIds: draft.channelIds, startDate: draft.startDate, endDate: draft.endDate, mechanic: draft.mechanic, mechanicId: draft.mechanicId, mechanicConfiguration: draft.mechanicConfiguration, discountRate: metrics.discountRate, usualPrice: draft.usualPrice, promoPrice:effectivePromoPrice, costPrice: draft.costPrice, minimumMarginRate: draft.minimumMarginRate,
       forecastRevenue: metrics.revenue, forecastMargin: metrics.marginAfterExpenses, marginRate: metrics.marginRate, roi: metrics.roi, expenses: detailExpenses, operationalStatus: status, controlStatus, owner: 'Camille', checks: compliance,
@@ -186,7 +187,7 @@ export function PromotionWizard() {
 
     <Card className="wizard-panel min-h-[460px] p-6 md:p-8">
       {step === 0 && <ProductsStep draft={draft} filteredProducts={filteredProducts} selectedProducts={selectedProducts} totalVolume={totalVolume} search={search} setSearch={setSearch} toggleProduct={toggleProduct} toggleLine={toggleLine} update={update} onCreate={() => setShowProductModal(true)} />}
-      {step === 1 && <ChannelStep settings={channelSettings} context={channelContext} draft={draft} setContext={(context) => { setChannelContext(context); update('channelIds', draft.channelIds.filter((id) => context === 'GMS' ? getChannel(id).type === 'GMS' : getChannel(id).type !== 'GMS')); }} toggleChannel={toggleChannel} />}
+      {step === 1 && <ChannelStep companyScopeIds={companyScopeIds} context={channelContext} draft={draft} setContext={setChannelContext} onChange={(retailerScopes)=>{const channelIds=channelIdsForSelections(retailerScopes),target=channelSettings.find(setting=>channelIds.includes(setting.channelId))?.defaultMarginTarget;setDraft(current=>({...current,retailerScopes,channelIds,...(target!=null?{minimumMarginRate:target}:{})}))}} />}
       {step === 2 && <PeriodStep draft={draft} duration={duration} overlaps={overlaps} update={update} />}
       {step === 3 && <MechanicSelector category={getLine(selectedLineId).category} channel={selectedChannels[0]?.type} selectedId={draft.mechanicId} configuration={draft.mechanicConfiguration} onChange={(mechanicId, mechanicConfiguration) => { const mechanic = getMechanic(mechanicId); const benefit = calculateEquivalentBenefit(mechanicId, mechanicConfiguration); setDraft((current) => ({ ...current, mechanicId, mechanicConfiguration, mechanicValue: mechanicConfiguration.value, mechanic: mechanic ? `${mechanic.name}${benefit > 0 ? ` — ${new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2}).format(benefit)} % équivalent` : ''}` : '' })); }} />}
       {step === 4 && <EconomicsStep draft={draft} products={selectedProducts} expenseLabels={isGms ? expensesByContext.GMS : expensesByContext.ecommerce} totalVolume={totalVolume} totalExpenses={expenses} result={economics} onPatch={(patch)=>setDraft((current)=>({...current,...patch}))} onEditMechanic={()=>setStep(3)} isGms={isGms} />}
@@ -203,11 +204,7 @@ function ProductsStep({ draft, filteredProducts, selectedProducts, totalVolume, 
   return <section><StepTitle title="Que souhaitez-vous promouvoir ?" text="Choisissez une gamme entière ou sélectionnez précisément vos références." /><div className="mt-6"><p className="text-xs font-bold uppercase tracking-wider text-navy-400">Gammes</p><div className="mt-3 flex flex-wrap gap-2">{productLines.map((line) => <button className={cn('rounded-xl border px-4 py-2 text-sm font-semibold transition', draft.selectedLineIds.includes(line.id) ? 'border-mint-500 bg-mint-50 text-navy-900' : 'border-navy-100 hover:border-navy-200')} key={line.id} onClick={() => toggleLine(line.id)} type="button">{line.name}</button>)}</div></div><div className="mt-6 flex flex-col gap-3 sm:flex-row"><input aria-label="Recherche produit" className={inputClass} placeholder="Rechercher un produit, une gamme ou un EAN" value={search} onChange={(event) => setSearch(event.target.value)} /><Button variant="secondary" onClick={onCreate}><Plus className="mr-2" size={16} />Créer un produit</Button></div><div className="mt-4 grid max-h-60 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">{filteredProducts.map((product) => <button aria-pressed={draft.selectedProducts.includes(product.id)} className={cn('selection-tile flex items-center gap-3 rounded-xl border p-3 text-left transition', draft.selectedProducts.includes(product.id) ? 'border-mint-500 bg-mint-50' : 'border-navy-100 hover:border-navy-200 hover:bg-navy-50')} key={product.id} onClick={() => toggleProduct(product.id)} type="button"><span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded border', draft.selectedProducts.includes(product.id) && 'border-mint-500 bg-mint-500 text-navy-900')}>{draft.selectedProducts.includes(product.id) && <Check size={13} />}</span><span className="min-w-0"><strong className="block truncate text-sm">{product.name}</strong><span className="block truncate text-xs text-navy-500">{getLine(product.lineId).name} · {product.ean.code} · {product.ean.packaging}</span></span></button>)}</div><p className="mt-3 text-sm text-navy-500">Vous pourrez également compléter votre catalogue plus tard.</p><div className="mt-7 border-t border-navy-100 pt-6"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-bold">Volume prévisionnel</h3><div className="flex gap-2"><Button variant={draft.volumeMode === 'global' ? 'primary' : 'secondary'} onClick={() => update('volumeMode', 'global')}>Global</Button><Button disabled={!selectedProducts.length} variant={draft.volumeMode === 'reference' ? 'primary' : 'secondary'} onClick={() => update('volumeMode', 'reference')}>Par référence</Button></div></div>{draft.volumeMode === 'global' ? <div className="mt-4 max-w-sm"><NumericField label="Volume prévisionnel" unit="unités" value={draft.globalVolume} onChange={(value) => update('globalVolume', value)} /></div> : <div className="mt-4 space-y-2">{selectedProducts.map((product) => <div className="grid grid-cols-[minmax(0,1fr)_180px] items-center gap-3" key={product.id}><span className="truncate text-sm">{product.name}</span><NumericField label="" unit="unités" value={draft.referenceVolumes[product.id] || 0} onChange={(value) => update('referenceVolumes', { ...draft.referenceVolumes, [product.id]: value })} /></div>)}<p className="border-t border-navy-100 pt-3 text-right font-bold tabular-nums">Total : {totalVolume.toLocaleString('fr-FR')} unités</p></div>}</div></section>;
 }
 
-function ChannelStep({ context, draft, settings, setContext, toggleChannel }: { context: 'GMS' | 'ecommerce'; draft: Draft; settings:ChannelSettings[]; setContext: (context: 'GMS' | 'ecommerce') => void; toggleChannel: (id: string) => void }) {
-  const visible = channels.filter((channel) => (settings.find(item=>item.channelId===channel.id)?.selected??channel.selected) && (context === 'GMS' ? channel.type === 'GMS' : channel.type !== 'GMS'));
-  return <section><StepTitle title="Où aura lieu cette promotion ?" text="Sélectionnez une ou plusieurs enseignes disponibles pour Maison Alba." />{company.profile === 'mixed' && <div className="mt-6 inline-flex rounded-xl bg-navy-50 p-1"><button className={cn('rounded-lg px-4 py-2 text-sm font-semibold', context === 'GMS' && 'bg-white shadow-sm')} onClick={() => setContext('GMS')} type="button">GMS</button><button className={cn('rounded-lg px-4 py-2 text-sm font-semibold', context === 'ecommerce' && 'bg-white shadow-sm')} onClick={() => setContext('ecommerce')} type="button">E-commerce</button></div>}<div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{visible.map((channel) => <button aria-pressed={draft.channelIds.includes(channel.id)} className={cn('selection-tile flex items-center gap-3 rounded-xl border p-4 text-left transition', draft.channelIds.includes(channel.id) ? 'border-mint-500 bg-mint-50' : 'border-navy-100 hover:border-navy-200 hover:bg-navy-50')} key={channel.id} onClick={() => toggleChannel(channel.id)} type="button"><ChannelLogo channel={channel} size="sm"/><span><strong className="block">{channel.name}</strong><span className="text-xs text-navy-500">{channel.type}</span></span>{draft.channelIds.includes(channel.id) && <CheckCircle2 className="ml-auto text-mint-600" size={18} />}</button>)}</div>{draft.channelIds.length > 1 && <Notice tone="info">Les paramètres communs sont utilisés dans ce prototype. Ils pourront être ajustés par enseigne ensuite.</Notice>}</section>;
-}
-
+function ChannelStep({context,draft,companyScopeIds,setContext,onChange}:{context:'GMS'|'ecommerce';draft:Draft;companyScopeIds:string[];setContext:(value:'GMS'|'ecommerce')=>void;onChange:(value:RetailerScopeSelection[])=>void}){return <section><StepTitle title="Où aura lieu cette promotion ?" text="Sélectionnez un périmètre en un clic, puis précisez les formats uniquement si nécessaire."/>{company.profile==='mixed'&&<div className="mt-6 inline-flex rounded-xl bg-navy-50 p-1"><button className={cn('rounded-lg px-4 py-2 text-sm font-semibold',context==='GMS'&&'bg-white shadow-sm')} onClick={()=>setContext('GMS')} type="button">GMS</button><button className={cn('rounded-lg px-4 py-2 text-sm font-semibold',context==='ecommerce'&&'bg-white shadow-sm')} onClick={()=>setContext('ecommerce')} type="button">E-commerce</button></div>}<div className="mt-5"><RetailerSelector companyScopeIds={companyScopeIds} context={context} mode="wizard" onChange={onChange} value={draft.retailerScopes}/></div>{draft.retailerScopes.length>1&&<Notice tone="info">Plusieurs périmètres seront associés à cette promotion.</Notice>}</section>}
 function PeriodStep({ draft, duration, overlaps, update }: { draft: Draft; duration: number; overlaps: Promotion[]; update: <K extends keyof Draft>(key: K, value: Draft[K]) => void }) {
   return <section><StepTitle title="Quand aura lieu la promotion ?" /><div className="mt-6 grid gap-4 sm:grid-cols-2"><Field label="Date de début"><input className={inputClass} type="date" value={draft.startDate} onChange={(event) => update('startDate', event.target.value)} /></Field><Field label="Date de fin"><input className={inputClass} min={draft.startDate} type="date" value={draft.endDate} onChange={(event) => update('endDate', event.target.value)} /></Field></div><p className="mt-4 font-semibold tabular-nums">Durée : {duration} jour{duration > 1 ? 's' : ''}</p>{overlaps.length > 0 && <Notice tone="warning"><strong>À vérifier — chevauchement détecté</strong><p className="mt-1">Une autre promotion concernant cette gamme est prévue sur une partie de cette période. Ce n’est pas un problème réglementaire.</p>{overlaps.map((promotion) => <Link className="mt-2 block font-semibold underline" href={`/promotions/${promotion.id}`} key={promotion.id}>{promotion.name} · {shortDate(promotion.startDate)} → {shortDate(promotion.endDate)}</Link>)}</Notice>}</section>;
 }
