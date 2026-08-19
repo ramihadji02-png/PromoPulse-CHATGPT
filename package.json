@@ -1,0 +1,36 @@
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "lint": "eslint .",
+    "test:economics": "tsx --test lib/promotion-engine/economics.test.ts",
+    "test:catalog": "tsx --test lib/catalog/import.test.ts",
+    "test:ranges": "tsx --test lib/catalog/ranges.test.ts",
+    "test:supplier-economics": "tsx --test lib/promotion-engine/supplier-economics.test.ts",
+    "test:retailers": "tsx --test lib/retailers/repository.test.ts",
+    "test:wizard": "tsx --test lib/promotion-engine/wizard-guidance.test.ts"
+  },
+  "dependencies": {
+    "@next/eslint-plugin-next": "latest",
+    "clsx": "latest",
+    "exceljs": "^4.4.0",
+    "lucide-react": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "recharts": "latest",
+    "tailwind-merge": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "autoprefixer": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "postcss": "latest",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.23.12",
+    "typescript": "latest"
+  }
+}
