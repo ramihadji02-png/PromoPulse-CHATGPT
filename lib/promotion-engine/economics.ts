@@ -1,6 +1,6 @@
 import type { ChannelType, ExpenseBase, ExpenseMode } from '@/types/promo';
 import type { MechanicConfiguration, MechanicId } from './mechanics';
-import { calculateEquivalentBenefit } from './mechanics';
+import { calculateEquivalentBenefit, secondProductPriceBreakdown } from './mechanics';
 
 export type PromotionEconomicsProduct = {
   id: string;
@@ -28,6 +28,7 @@ export type PromotionEconomicsInput = {
   marginTarget: number;
   products?: PromotionEconomicsProduct[];
   channel?: ChannelType;
+  baselineVolume?:number;
 };
 
 export type MechanicPriceBreakdown = {
@@ -65,6 +66,13 @@ export type PromotionEconomicsResult = {
   averageSellingPrice: number;
   marginGapToTarget: number;
   priceBreakdown: MechanicPriceBreakdown;
+  isComplete:boolean;
+  promotionCostPerUnit?:number;
+  normalUnitMargin?:number;
+  promotedUnitMargin?:number;
+  incrementalVolume?:number;
+  incrementalVolumeRate?:number;
+  breakEvenVolume?:number;
 };
 
 /**
@@ -90,7 +98,7 @@ export function calculatePromotionEconomics(input: PromotionEconomicsInput): Pro
 function calculateSingle(input:PromotionEconomicsInput):PromotionEconomicsResult{
   const regular=Math.max(0,input.regularPrice),volume=Math.max(0,Math.floor(input.forecastVolume)),config=input.mechanic.configuration;
   let consumer=0,physical=volume,paid=volume,free=0,transactions=volume,remainder=0;
-  if(input.mechanic.id==='second-product'){transactions=Math.floor(volume/2);remainder=volume%2;consumer=transactions*regular*(2-config.value/100)+remainder*regular;}
+  if(input.mechanic.id==='second-product'){const pair=secondProductPriceBreakdown(regular,config.value);transactions=Math.floor(volume/2);remainder=volume%2;consumer=transactions*pair.pairTotal+remainder*regular;}
   else if(input.mechanic.id==='multi-buy'){const bought=Math.max(1,Math.floor(config.boughtQuantity)),offered=Math.max(0,Math.floor(config.freeQuantity)),size=bought+offered;transactions=Math.floor(volume/size);remainder=volume%size;free=transactions*offered;paid=volume-free;consumer=paid*regular;}
   else if(input.mechanic.id==='promo-pack'){const units=Math.max(1,Math.floor(config.packUnits+config.packExtraQuantity));transactions=volume;physical=volume*units;paid=physical;consumer=volume*Math.max(0,config.packPrice);}
   else consumer=getMechanicPriceBreakdown(input).averageSellingPrice*volume;
@@ -108,14 +116,14 @@ function fundingTotal(funding:PromotionFunding|undefined,physical:number,consume
 function finalize(input:PromotionEconomicsInput,consumerSales:number,supplierGrossRevenue:number,productCost:number,forecastVolume:number,billedVolume:number,priceBreakdown:MechanicPriceBreakdown,inputVolume=forecastVolume,paidVolume=forecastVolume,freeVolume=0,transactionCount=forecastVolume,remainderUnits=0):PromotionEconomicsResult{
  const operationExpenses=input.expenseLines?calculateExpenseTotal(input.expenseLines,{physicalUnits:forecastVolume,billedUnits:billedVolume,packs:input.mechanic.id==='promo-pack'?inputVolume:0,orders:transactionCount}):Math.max(0,input.expenses);
  const saving=Math.max(0,input.regularPrice*forecastVolume-consumerSales),supplierFundingCost=fundingTotal(input.supplierFunding,forecastVolume,saving),contribution=supplierGrossRevenue-productCost-supplierFundingCost-operationExpenses,rate=supplierGrossRevenue>0?contribution/supplierGrossRevenue*100:0;
- return {effectiveDiscount:priceBreakdown.effectiveDiscount,promotionalRevenue:consumerSales,consumerSales,supplierGrossRevenue,supplierFundingCost,operationExpenses,contribution,contributionRate:rate,billedVolume,productCost,totalExpenses:operationExpenses+supplierFundingCost,grossMarginBeforeExpenses:supplierGrossRevenue-productCost,grossMargin:contribution,marginRate:rate,promotionalROI:0,forecastVolume,inputVolume,paidVolume,freeVolume,transactionCount,remainderUnits,averageSellingPrice:forecastVolume>0?consumerSales/forecastVolume:0,marginGapToTarget:rate-input.marginTarget,priceBreakdown};
+ const totalPromotionCost=operationExpenses+supplierFundingCost,isComplete=input.unitCost>0&&(input.channel!=='GMS'||(input.sellInPrice??0)>0),normalUnitMargin=input.sellInPrice!=null?input.sellInPrice-input.unitCost:undefined,promotedUnitMargin=billedVolume>0?(supplierGrossRevenue-supplierFundingCost-operationExpenses)/billedVolume-input.unitCost:undefined,incrementalVolume=input.baselineVolume!=null?forecastVolume-input.baselineVolume:undefined,incrementalVolumeRate=input.baselineVolume&&incrementalVolume!=null?incrementalVolume/input.baselineVolume*100:undefined,unitContributionBeforeFixed=billedVolume>0?(supplierGrossRevenue-supplierFundingCost-productCost)/billedVolume:0,breakEvenVolume=operationExpenses>0&&unitContributionBeforeFixed>0?Math.ceil(operationExpenses/unitContributionBeforeFixed):undefined;return {effectiveDiscount:priceBreakdown.effectiveDiscount,promotionalRevenue:consumerSales,consumerSales,supplierGrossRevenue,supplierFundingCost,operationExpenses,contribution,contributionRate:rate,billedVolume,productCost,totalExpenses:totalPromotionCost,grossMarginBeforeExpenses:supplierGrossRevenue-productCost,grossMargin:contribution,marginRate:rate,promotionalROI:0,forecastVolume,inputVolume,paidVolume,freeVolume,transactionCount,remainderUnits,averageSellingPrice:forecastVolume>0?consumerSales/forecastVolume:0,marginGapToTarget:rate-input.marginTarget,priceBreakdown,isComplete,promotionCostPerUnit:forecastVolume>0?totalPromotionCost/forecastVolume:undefined,normalUnitMargin,promotedUnitMargin,incrementalVolume,incrementalVolumeRate,breakEvenVolume};
 }
 
 export function getMechanicPriceBreakdown(input: PromotionEconomicsInput): MechanicPriceBreakdown {
   const regular = Math.max(0, input.regularPrice);
   const config = input.mechanic.configuration;
   const effectiveDiscount = calculateEquivalentBenefit(input.mechanic.id, config);
-  if (input.mechanic.id === 'second-product') return transaction(regular * 2, regular * (2 - config.value / 100), 2, 2);
+  if (input.mechanic.id === 'second-product') {const pair=secondProductPriceBreakdown(regular,config.value);return transaction(regular*2,pair.pairTotal,2,2);}
   if (input.mechanic.id === 'multi-buy') {
     const delivered = Math.max(1, config.boughtQuantity + config.freeQuantity);
     return transaction(regular * delivered, regular * Math.max(0, config.boughtQuantity), delivered, Math.max(0, config.boughtQuantity));

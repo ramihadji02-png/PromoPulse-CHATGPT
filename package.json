@@ -7,7 +7,8 @@
     "test:catalog": "tsx --test lib/catalog/import.test.ts",
     "test:ranges": "tsx --test lib/catalog/ranges.test.ts",
     "test:supplier-economics": "tsx --test lib/promotion-engine/supplier-economics.test.ts",
-    "test:retailers": "tsx --test lib/retailers/repository.test.ts"
+    "test:retailers": "tsx --test lib/retailers/repository.test.ts",
+    "test:wizard": "tsx --test lib/promotion-engine/wizard-guidance.test.ts"
   },
   "dependencies": {
     "@next/eslint-plugin-next": "latest",
